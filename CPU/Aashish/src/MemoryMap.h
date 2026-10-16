@@ -21,6 +21,9 @@ namespace MemoryMap{
 	const Word PORT_FRAME 		= 0xF003;
 	const Word PORT_CONSOLE_OUT = 0xF004;
 
+	//the screen in VRAM: 1 byte per pixel, row by row, pixel (x, y) at VRAM_START + y*SCREEN_WIDTH + x
+	const int SCREEN_WIDTH  = 32;
+	const int SCREEN_HEIGHT = 16;			//32 x 16 = 512 bytes of the 4 KB VRAM
 }
 
 #endif

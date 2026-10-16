@@ -21,6 +21,10 @@ class Bus{
 		Word readWord(Word address);			//little-endian: low byte first
 		bool writeWord(Word address, Word value);
 
+		//for the debugger and the State Manager: never raise a fault, never call the listener
+		Byte peek(Word address);				//no side effects; 0xFF if no chip is there
+		bool poke(Word address, Byte value);	//undo writes old values back with this; false if refused
+
 		bool hasFault() const;
 		const Fault& getFault() const;
 		void clearFault();

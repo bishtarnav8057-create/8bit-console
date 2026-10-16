@@ -403,3 +403,26 @@ const Fault& CPU::getFault() const{
 unsigned long CPU::getCycles() const{
 	return cycles;
 }
+
+void CPU::setPC(Word value){
+	pc = value;
+	instrStart = value;
+}
+
+void CPU::setSP(Word value){
+	sp = value;
+}
+
+void CPU::setFlags(Byte value){
+	flags = (Byte)(value & 0x0F);
+}
+
+void CPU::setCycles(unsigned long value){
+	cycles = value;
+}
+
+//undo can step back from a HLT or a fault, so leaving Faulted also wipes the old fault
+void CPU::setState(CpuState value){
+	state = value;
+	if(value != CpuState::Faulted) fault = Fault();
+}

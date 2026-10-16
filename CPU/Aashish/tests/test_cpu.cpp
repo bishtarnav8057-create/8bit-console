@@ -1,9 +1,10 @@
 //test framework that checks answers automatically and says PASS OR FAIL
-//covers every class in CPU/Aashish/src: Bits, Fault, Ram, Rom, Bus, OpcodeTable, CPU, Disassembler
+//covers every class in CPU/Aashish/src: Bits, Fault, Ram, Rom, Bus, OpcodeTable, CPU, Disassembler, IoPorts, Console
 
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "../src/Bits.h"
 #include "../src/MemoryMap.h"
@@ -14,6 +15,8 @@
 #include "../src/Opcodes.h"
 #include "../src/CPU.h"
 #include "../src/Disassembler.h"
+#include "../src/IoPorts.h"
+#include "../src/Console.h"
 
 int passed = 0;
 int failed = 0;
@@ -29,7 +32,8 @@ void check(bool condition, const char* name){
 	}
 }
 
-//a full console wired exactly like the memory map (I/O ports 0xF000-0xF0FF are left for the PPU side)
+//the memory chips wired like the memory map, but WITHOUT the I/O ports, so 0xF000 is a handy
+//empty address for fault tests. The real machine with ports is the Console class (testConsole).
 struct Machine{
 	Rom rom;
 	Ram ram;
@@ -490,6 +494,231 @@ void testDisassembler(){
 	check(!m.bus.hasFault(), "disassembling never leaves a fault on the bus");
 }
 
+void testPeekPoke(){
+	printf("--Bus peek and poke--\n");
+	Ram a(0x100, "A");
+	Rom r(0x100);
+	IoPorts io;
+	Bus bus;
+	bus.attach(0x1000, 0x10FF, &a);
+	bus.attach(0x0000, 0x00FF, &r);
+	bus.attach(MemoryMap::IO_START, MemoryMap::IO_END, &io);
+
+	int heard = 0;
+	Byte heardOldValue = 0;
+	bus.setWriteListener([&](Word, Byte oldValue, Byte){ heard++; heardOldValue = oldValue; });
+
+	check(bus.peek(0x5000) == 0xFF && !bus.hasFault(), "peek at an empty address gives 0xFF and no fault");
+	check(bus.poke(0x1003, 0x42) && a.read(3) == 0x42, "poke writes into the chip");
+	check(heard == 0, "poke does not call the listener (undo must not record itself)");
+	check(bus.peek(0x1003) == 0x42, "peek reads it back");
+	check(!bus.poke(0x0001, 1) && !bus.hasFault(), "poke into ROM is refused without a fault");
+	check(!bus.poke(0x5000, 1) && !bus.hasFault(), "poke at an empty address is refused without a fault");
+
+	Word before = io.getRandomState();
+	bus.peek(MemoryMap::PORT_RNG);
+	check(io.getRandomState() == before, "peek at the RNG port does not use up a number");
+	bus.read(MemoryMap::PORT_RNG);
+	check(io.getRandomState() != before, "read at the RNG port does");
+
+	bus.write(MemoryMap::PORT_PPU_CTRL, 0x05);
+	bus.write(MemoryMap::PORT_PPU_CTRL, 0x07);
+	check(heard == 2 && heardOldValue == 0x05, "the listener's old value comes from peek");
+}
+
+void testCpuSetters(){
+	printf("--CPU setters (for undo and the debugger)--\n");
+	Machine m;
+	m.cpu.setPC(0x1234);
+	m.cpu.setSP(0xF800);
+	m.cpu.setFlags(0xFF);
+	m.cpu.setCycles(99);
+	check(m.cpu.getPC() == 0x1234 && m.cpu.getSP() == 0xF800 && m.cpu.getCycles() == 99, "setPC, setSP, setCycles");
+	check(m.cpu.getFlags() == 0x0F, "setFlags keeps only bits 0-3");
+
+	Byte bad[] = {0xFF};
+	RUN(m, bad);
+	m.cpu.setState(CpuState::Running);
+	check(m.cpu.getState() == CpuState::Running && m.cpu.getFault().type == FaultType::None, "setState(Running) leaves a fault and clears it");
+
+	//a real undo: record every memory write, go 12 instructions forward, then put everything back
+	Byte program[] = {
+		0x11, 0x00, 0x01,			//0x0000 LDI R0, 1
+		0x13, 0x00, 0x00, 0x80,		//0x0003 ST R0, [0x8000]   loop
+		0x38, 0x00, 0x03,			//0x0007 ADDI R0, 3
+		0x80, 0x00,					//0x000A PUSH R0
+		0x3A, 0x00, 0x1F,			//0x000C CMPI R0, 31
+		0x62, 0x03, 0x00,			//0x000F JNZ 0x0003
+		0x01						//0x0012 HLT
+	};
+	Machine reference;
+	RUN(reference, program);
+
+	m.rom.load(program, sizeof(program));
+	m.cpu.reset();
+	m.cpu.run(7);
+
+	Byte savedReg[CPU::NUM_REGS];
+	for(int i = 0; i < CPU::NUM_REGS; ++i) savedReg[i] = m.cpu.getReg(i);
+	Word savedPC = m.cpu.getPC(), savedSP = m.cpu.getSP();
+	Byte savedFlags = m.cpu.getFlags();
+	unsigned long savedCycles = m.cpu.getCycles();
+	Byte savedRam = m.bus.peek(0x8000);
+
+	struct Change { Word address; Byte oldValue; };
+	std::vector<Change> changes;
+	m.bus.setWriteListener([&](Word address, Byte oldValue, Byte){ changes.push_back({address, oldValue}); });
+	m.cpu.run(12);
+	m.bus.setWriteListener(nullptr);
+	check(m.cpu.getPC() != savedPC && !changes.empty(), "12 more instructions changed the machine");
+
+	for(size_t i = changes.size(); i > 0; --i) m.bus.poke(changes[i - 1].address, changes[i - 1].oldValue);
+	for(int i = 0; i < CPU::NUM_REGS; ++i) m.cpu.setReg(i, savedReg[i]);
+	m.cpu.setPC(savedPC);
+	m.cpu.setSP(savedSP);
+	m.cpu.setFlags(savedFlags);
+	m.cpu.setCycles(savedCycles);
+	m.cpu.setState(CpuState::Running);
+
+	check(m.cpu.getPC() == savedPC && m.cpu.getReg(0) == savedReg[0] && m.bus.peek(0x8000) == savedRam
+		&& m.bus.peek(0xFFFF) == 0x04 && m.bus.peek(0xFFFE) == 0x00, "undo puts registers, RAM and stack back");
+
+	m.cpu.run(100000);
+	check(m.cpu.getState() == CpuState::Halted && m.cpu.getReg(0) == reference.cpu.getReg(0)
+		&& m.cpu.getSP() == reference.cpu.getSP() && m.cpu.getCycles() == reference.cpu.getCycles()
+		&& m.bus.peek(0x8000) == reference.bus.peek(0x8000), "after undo the program finishes exactly like a run without undo");
+}
+
+void testIoPorts(){
+	printf("--IoPorts--\n");
+	IoPorts io;
+	const Word INPUT = MemoryMap::PORT_INPUT - MemoryMap::IO_START;
+	const Word RNG = MemoryMap::PORT_RNG - MemoryMap::IO_START;
+	const Word PPU = MemoryMap::PORT_PPU_CTRL - MemoryMap::IO_START;
+	const Word FRAME = MemoryMap::PORT_FRAME - MemoryMap::IO_START;
+	const Word OUT = MemoryMap::PORT_CONSOLE_OUT - MemoryMap::IO_START;
+
+	check(io.size() == 256 && std::strcmp(io.name(), "IO") == 0, "256 bytes, named IO");
+	check(io.read(INPUT) == 0 && io.read(FRAME) == 0 && io.getConsoleText().empty(), "starts with no buttons, frame 0, no text");
+
+	io.setButton(IoPorts::BTN_LEFT, true);
+	io.setButton(IoPorts::BTN_A, true);
+	check(io.read(INPUT) == 0x14, "LEFT (bit 2) + A (bit 4) held reads 0x14");
+	io.setButton(IoPorts::BTN_LEFT, false);
+	check(io.read(INPUT) == 0x10, "letting go of LEFT clears its bit");
+	check(!io.write(INPUT, 0xFF) && io.getInput() == 0x10, "INPUT is read-only");
+
+	io.seedRandom(1234);
+	Byte first = io.read(RNG), second = io.read(RNG);
+	check(io.peek(RNG) == second && io.peek(RNG) == second, "peek repeats the last number");
+	io.seedRandom(1234);
+	check(io.read(RNG) == first && io.read(RNG) == second, "the same seed gives the same numbers");
+	io.seedRandom(0);
+	check(io.getRandomState() != 0, "seed 0 is replaced, so the generator cannot get stuck");
+
+	io.seedRandom(0x0001);
+	unsigned long period = 0;
+	do{ io.read(RNG); period++; } while(io.getRandomState() != 0x0001 && period < 70000);
+	check(period == 65535, "the generator goes through all 65535 states before repeating");
+
+	check(io.write(RNG, 0x42) && io.getRandomState() == 0x4242, "a program can write a seed to the RNG port");
+
+	Byte heardPpu = 0;
+	io.setPpuListener([&](Byte value){ heardPpu = value; });
+	check(io.write(PPU, 0x81) && io.read(PPU) == 0x81 && heardPpu == 0x81, "PPU_CTRL is stored and the PPU is told");
+
+	std::string heardText;
+	io.setConsoleListener([&](char c){ heardText += c; });
+	io.write(OUT, 'H');
+	io.write(OUT, 'I');
+	check(io.getConsoleText() == "HI" && heardText == "HI" && io.read(OUT) == 0, "CONSOLE_OUT collects text and tells the listener");
+
+	for(int i = 0; i < 256; ++i) io.nextFrame();
+	check(io.read(FRAME) == 0, "the frame counter wraps 255 -> 0");
+	io.nextFrame();
+	check(io.read(FRAME) == 1 && !io.write(FRAME, 9), "nextFrame counts up, FRAME is read-only");
+
+	check(io.read(0x10) == 0xFF && !io.write(0x10, 1), "an offset with no port reads 0xFF and refuses writes");
+
+	io.reset();
+	check(io.getInput() == 0 && io.getFrame() == 0 && io.getConsoleText().empty(), "reset puts everything back");
+}
+
+void testConsole(){
+	printf("--Console (the whole machine)--\n");
+	Console c;
+
+	bool allMapped = true;
+	for(unsigned int address = 0; address <= 0xFFFF; ++address){
+		c.bus().read((Word)address);
+		if(c.bus().hasFault()) allMapped = false;
+		c.bus().clearFault();
+	}
+	check(allMapped, "every one of the 65536 addresses belongs to a chip");
+
+	std::vector<Byte> tooBig(0x8001, 0x00);
+	check(!c.loadProgram(tooBig), "a program bigger than ROM is refused");
+
+	Byte hello[] = {
+		0x11, 0x00, 0x48,			//LDI R0, 'H'
+		0x13, 0x00, 0x04, 0xF0,		//ST R0, [0xF004]
+		0x11, 0x00, 0x49,			//LDI R0, 'I'
+		0x13, 0x00, 0x04, 0xF0,		//ST R0, [0xF004]
+		0x01						//HLT
+	};
+	c.loadProgram(hello, sizeof(hello));
+	check(c.runFrame() == StepResult::Halt && c.io().getConsoleText() == "HI", "a program prints HI through CONSOLE_OUT");
+
+	Byte readInput[] = {0x12, 0x00, 0x00, 0xF0, 0x01};		//LD R0, [0xF000] ; HLT
+	c.loadProgram(readInput, sizeof(readInput));
+	c.io().setButton(IoPorts::BTN_A, true);
+	c.runFrame();
+	check(c.cpu().getReg(0) == 0x10, "the CPU reads a held A button from PORT_INPUT");
+
+	Byte readRandom[] = {0x12, 0x00, 0x01, 0xF0, 0x12, 0x01, 0x01, 0xF0, 0x01};	//LD R0, [0xF001] ; LD R1, [0xF001] ; HLT
+	c.loadProgram(readRandom, sizeof(readRandom));
+	c.runFrame();
+	IoPorts same;
+	Byte r0 = same.read(MemoryMap::PORT_RNG - MemoryMap::IO_START);
+	Byte r1 = same.read(MemoryMap::PORT_RNG - MemoryMap::IO_START);
+	check(c.cpu().getReg(0) == r0 && c.cpu().getReg(1) == r1 && r0 != r1, "the CPU gets the RNG sequence, a new number each read");
+
+	Byte badWrite[] = {0x13, 0x00, 0x00, 0xF0};				//ST R0, [0xF000]
+	c.loadProgram(badWrite, sizeof(badWrite));
+	check(c.runFrame() == StepResult::Fault && c.cpu().getFault().type == FaultType::IllegalWrite, "writing the read-only INPUT port gives IllegalWrite");
+
+	//wait for the next frame (vsync), then draw one pixel
+	Byte vsync[] = {
+		0x12, 0x01, 0x03, 0xF0,		//0x0000 LD R1, [0xF003]   frame now
+		0x12, 0x00, 0x03, 0xF0,		//0x0004 LD R0, [0xF003]   loop
+		0x37, 0x01,					//0x0008 CMP R0, R1
+		0x61, 0x04, 0x00,			//0x000A JZ 0x0004         same frame: keep waiting
+		0x11, 0x02, 0x01,			//0x000D LDI R2, 1
+		0x13, 0x02, 0x00, 0xE0,		//0x0010 ST R2, [0xE000]   pixel (0, 0)
+		0x01						//0x0014 HLT
+	};
+	c.loadProgram(vsync, sizeof(vsync));
+	check(c.runFrame() == StepResult::Ok && c.pixel(0, 0) == 0 && c.io().getFrame() == 1, "frame 1: the program is still waiting");
+	check(c.cpu().getCycles() >= Console::CYCLES_PER_FRAME, "the frame used its whole cycle budget");
+	check(c.runFrame() == StepResult::Halt && c.pixel(0, 0) == 1, "frame 2: it saw the frame change and drew the pixel");
+	check(c.runFrame() == StepResult::Halt && c.io().getFrame() == 3, "a halted CPU still lets frames tick");
+
+	check(c.bus().write(0xE000 + 2 * MemoryMap::SCREEN_WIDTH + 5, 7) && c.pixel(5, 2) == 7, "pixel(x, y) is VRAM_START + y*32 + x");
+	check(c.pixel(-1, 0) == 0 && c.pixel(32, 0) == 0 && c.pixel(0, 16) == 0, "pixels outside the 32x16 screen read 0");
+
+	int heardWrites = 0;
+	c.bus().setWriteListener([&](Word, Byte, Byte){ heardWrites++; });
+	c.loadProgram(hello, sizeof(hello));
+	c.runFrame();
+	check(heardWrites == 2, "the State Manager hook hears the CPU's writes");
+	c.bus().setWriteListener(nullptr);
+
+	c.bus().write(0x8000, 0x55);
+	c.reset();
+	check(c.bus().peek(0x8000) == 0 && c.pixel(5, 2) == 0 && c.io().getConsoleText().empty() && c.bus().peek(0x0000) == 0x11,
+		"reset clears RAM, VRAM and ports but keeps the program in ROM");
+}
+
 int main(){
 	testBits();
 	testMemoryMap();
@@ -502,6 +731,10 @@ int main(){
 	testPrograms();
 	testFaults();
 	testDisassembler();
+	testPeekPoke();
+	testCpuSetters();
+	testIoPorts();
+	testConsole();
 
 	printf("\n%d passed, %d failed\n", passed, failed);
 	return failed == 0 ? 0 : 1;

@@ -34,6 +34,13 @@ class CPU{
 		const Fault& getFault() const;
 		unsigned long getCycles() const;
 
+		//for the State Manager (undo) and the debugger: put a saved state back
+		void  setPC(Word value);
+		void  setSP(Word value);
+		void  setFlags(Byte value);					//only bits 0-3 are kept
+		void  setCycles(unsigned long value);
+		void  setState(CpuState value);				//Running or Halted also clears the fault
+
 	private:
 		Bus&  bus;
 		Byte  reg[NUM_REGS];

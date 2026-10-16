@@ -54,7 +54,7 @@ bool Bus::write(Word address, Byte value){
 	}
 
 	Word offset = (Word)(address - m->start);
-	Byte oldValue = listener ? m->device->read(offset) : 0;		//only needed when someone is listening
+	Byte oldValue = listener ? m->device->peek(offset) : 0;		//only needed when someone is listening
 
 	if(!m->device->write(offset, value)){
 		raise(FaultType::IllegalWrite, address,
@@ -64,6 +64,18 @@ bool Bus::write(Word address, Byte value){
 
 	if(listener) listener(address, oldValue, value);
 	return true;
+}
+
+Byte Bus::peek(Word address){
+	Mapping* m = find(address);
+	if(m == nullptr) return 0xFF;
+	return m->device->peek((Word)(address - m->start));
+}
+
+bool Bus::poke(Word address, Byte value){
+	Mapping* m = find(address);
+	if(m == nullptr) return false;
+	return m->device->write((Word)(address - m->start), value);
 }
 
 Word Bus::readWord(Word address){

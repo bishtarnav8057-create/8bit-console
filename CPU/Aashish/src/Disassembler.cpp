@@ -5,10 +5,8 @@
 Disassembler::Disassembler(Bus& theBus) : bus(theBus) {}
 
 std::string Disassembler::line(Word address, Byte& length){
-	//looking must not disturb the machine: a fault caused only by reading here is wiped afterwards
-	bool hadFault = bus.hasFault();
-
-	Byte opcode = bus.read(address);
+	//looking must not disturb the machine, so peek: no faults, no side effects on the I/O ports
+	Byte opcode = bus.peek(address);
 	const OpcodeInfo& info = OpcodeTable::lookup(opcode);
 	std::string text;
 
@@ -19,9 +17,9 @@ std::string Disassembler::line(Word address, Byte& length){
 	else{
 		length = info.length;
 		text = info.mnemonic;
-		Byte b1 = (info.length > 1) ? bus.read((Word)(address + 1)) : 0;
-		Byte b2 = (info.length > 2) ? bus.read((Word)(address + 2)) : 0;
-		Byte b3 = (info.length > 3) ? bus.read((Word)(address + 3)) : 0;
+		Byte b1 = (info.length > 1) ? bus.peek((Word)(address + 1)) : 0;
+		Byte b2 = (info.length > 2) ? bus.peek((Word)(address + 2)) : 0;
+		Byte b3 = (info.length > 3) ? bus.peek((Word)(address + 3)) : 0;
 
 		switch(info.format){
 			case Format::Implied:
@@ -45,7 +43,6 @@ std::string Disassembler::line(Word address, Byte& length){
 		}
 	}
 
-	if(!hadFault && bus.hasFault()) bus.clearFault();
 	return hex16(address) + "  " + text;
 }
 
