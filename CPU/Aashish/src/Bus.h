@@ -38,7 +38,7 @@ class Bus{
 			Device* device;
 		};
 
-		std::vector<Mapping> mappings;
+		std::vector<Mapping> mappings;		//sorted by start address, never overlapping
 		Fault fault;
 		WriteListener listener;
 

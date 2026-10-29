@@ -3,15 +3,23 @@
 #ifndef CPU_H
 #define CPU_H
 
+#include <iosfwd>
 #include "Bits.h"
 #include "Bus.h"
 #include "Fault.h"
 #include "Opcodes.h"
+#include "InstructionTrace.h"
 
 enum class CpuState   { Running, Halted, Faulted };
 enum class StepResult { Ok, Halt, Fault };
 
 class CPU{
+	//a save point copies the private parts directly, the fault included, which no public setter can put back
+	friend class CpuSnapshot;
+
+	//std::cout << cpu: a register dump on one line. Not a member, because the stream is on the left of <<
+	friend std::ostream& operator<<(std::ostream& out, const CPU& cpu);
+
 	public:
 		static const int NUM_REGS = 8;
 		enum Flag { FLAG_Z = 0, FLAG_C = 1, FLAG_N = 2, FLAG_V = 3 };	//bit positions
@@ -33,6 +41,7 @@ class CPU{
 		CpuState getState() const;
 		const Fault& getFault() const;
 		unsigned long getCycles() const;
+		const InstructionTrace& getTrace() const;	//the last 16 instructions: how did we get here?
 
 		//for the State Manager (undo) and the debugger: put a saved state back
 		void  setPC(Word value);
@@ -51,6 +60,7 @@ class CPU{
 		Fault fault;
 		unsigned long cycles;
 		Word  instrStart;							//PC where the current instruction began
+		InstructionTrace trace;
 
 		Byte fetchByte();
 		Word fetchWord();

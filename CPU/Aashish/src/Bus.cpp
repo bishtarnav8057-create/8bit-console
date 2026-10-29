@@ -26,15 +26,28 @@ bool Bus::attach(Word start, Word end, Device* device){
 	m.start = start;
 	m.end = end;
 	m.device = device;
-	mappings.push_back(m);
+
+	//insert it in order of start address, so the list stays sorted for find()
+	size_t pos = 0;
+	while(pos < mappings.size() && mappings[pos].start < start) ++pos;
+	mappings.insert(mappings.begin() + pos, m);
 	return true;
 }
 
+//binary search: the ranges are sorted and never overlap, so look at the middle one and throw
+//away the half the address cannot be in. O(log n) checks instead of trying every chip.
+//This runs on every memory access the CPU makes, and attach() only runs at start-up.
 Bus::Mapping* Bus::find(Word address){
-	for(size_t i = 0; i < mappings.size(); ++i){
-		if(address >= mappings[i].start && address <= mappings[i].end) return &mappings[i];
+	int low = 0;
+	int high = (int)mappings.size() - 1;
+
+	while(low <= high){
+		int mid = low + (high - low) / 2;
+		if(address < mappings[mid].start)    high = mid - 1;		//it is in the left half
+		else if(address > mappings[mid].end) low = mid + 1;			//it is in the right half
+		else return &mappings[mid];
 	}
-	return nullptr;
+	return nullptr;			//it fell in a gap between chips
 }
 
 Byte Bus::read(Word address){

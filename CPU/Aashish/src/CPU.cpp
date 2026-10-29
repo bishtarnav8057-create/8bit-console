@@ -1,6 +1,7 @@
 #include "CPU.h"
 #include "MemoryMap.h"
 #include <cstdio>
+#include <ostream>
 
 namespace{
 	std::string hex8(Byte value){
@@ -29,6 +30,7 @@ void CPU::reset(Word startAddress){
 	fault = Fault();
 	cycles = 0;
 	instrStart = startAddress;
+	trace.clear();
 	bus.clearFault();
 }
 
@@ -42,6 +44,7 @@ StepResult CPU::step(){
 	//FETCH
 	Byte opcode = fetchByte();
 	if(busFailed()) return StepResult::Fault;
+	trace.enqueue(instrStart, opcode);		//before decoding, so a bad opcode is recorded too
 
 	//DECODE
 	const OpcodeInfo& info = OpcodeTable::lookup(opcode);
@@ -404,6 +407,10 @@ unsigned long CPU::getCycles() const{
 	return cycles;
 }
 
+const InstructionTrace& CPU::getTrace() const{
+	return trace;
+}
+
 void CPU::setPC(Word value){
 	pc = value;
 	instrStart = value;
@@ -425,4 +432,22 @@ void CPU::setCycles(unsigned long value){
 void CPU::setState(CpuState value){
 	state = value;
 	if(value != CpuState::Faulted) fault = Fault();
+}
+
+//e.g. "PC=0x0007 SP=0xFFFF R0=0x2A ... R7=0x80 flags=--N- Halted cycles=7"
+//a friend, so it reads the private registers directly instead of going through the getters
+std::ostream& operator<<(std::ostream& out, const CPU& cpu){
+	out << "PC=" << hex16(cpu.pc) << " SP=" << hex16(cpu.sp);
+	for(int i = 0; i < CPU::NUM_REGS; ++i) out << " R" << i << "=" << hex8(cpu.reg[i]);
+
+	const char names[] = "ZCNV";				//same order as the Flag bit positions
+	out << " flags=";
+	for(int i = 0; i < 4; ++i) out << (getBit(cpu.flags, i) ? names[i] : '-');
+
+	if(cpu.state == CpuState::Running)     out << " Running";
+	else if(cpu.state == CpuState::Halted) out << " Halted";
+	else                                   out << " Faulted (" << faultName(cpu.fault.type) << ")";
+
+	out << " cycles=" << cpu.cycles;
+	return out;
 }

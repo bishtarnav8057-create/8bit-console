@@ -1,5 +1,6 @@
 #include "Opcodes.h"
 #include <cctype>
+#include <unordered_map>
 
 namespace{
 	struct Entry{
@@ -82,12 +83,19 @@ namespace{
 		return t;
 	}
 
-	bool sameIgnoringCase(const std::string& a, const char* b){
-		size_t i = 0;
-		for(; i < a.size() && b[i] != '\0'; ++i){
-			if(std::toupper((unsigned char)a[i]) != std::toupper((unsigned char)b[i])) return false;
+	//mnemonic -> opcode, a hash map: the name is hashed to a bucket, so a lookup is O(1) on average
+	//instead of comparing against all 38 names. The assembler and the operand checker look up every line.
+	struct Names{
+		std::unordered_map<std::string, Byte> opcodeOf;
+
+		Names(){
+			for(int i = 0; i < ENTRY_COUNT; ++i) opcodeOf[ENTRIES[i].mnemonic] = ENTRIES[i].opcode;
 		}
-		return i == a.size() && b[i] == '\0';
+	};
+
+	const Names& names(){
+		static const Names n;
+		return n;
 	}
 }
 
@@ -95,12 +103,15 @@ const OpcodeInfo& OpcodeTable::lookup(Byte opcode){
 	return table().slot[opcode];
 }
 
-//case-insensitive, so "add", "Add" and "ADD" from the parser all work
+//case-insensitive, so "add", "Add" and "ADD" from the parser all work: the keys are upper case,
+//so the name is made upper case before it is hashed
 int OpcodeTable::find(const std::string& mnemonic){
-	for(int i = 0; i < ENTRY_COUNT; ++i){
-		if(sameIgnoringCase(mnemonic, ENTRIES[i].mnemonic)) return ENTRIES[i].opcode;
-	}
-	return -1;
+	std::string key = mnemonic;
+	for(size_t i = 0; i < key.size(); ++i) key[i] = (char)std::toupper((unsigned char)key[i]);
+
+	std::unordered_map<std::string, Byte>::const_iterator it = names().opcodeOf.find(key);
+	if(it == names().opcodeOf.end()) return -1;
+	return it->second;
 }
 
 Byte OpcodeTable::lengthOf(Format format){

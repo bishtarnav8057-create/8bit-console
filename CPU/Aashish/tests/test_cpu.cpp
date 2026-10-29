@@ -1,8 +1,10 @@
 //test framework that checks answers automatically and says PASS OR FAIL
-//covers every class in CPU/Aashish/src: Bits, Fault, Ram, Rom, Bus, OpcodeTable, CPU, Disassembler, IoPorts, Console
+//covers every class in CPU/Aashish/src: Bits, Fault, Ram, Rom, Bus, OpcodeTable, CPU, Disassembler, IoPorts, Console,
+//InstructionTrace, CpuSnapshot
 
 #include <cstdio>
 #include <cstring>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -17,6 +19,8 @@
 #include "../src/Disassembler.h"
 #include "../src/IoPorts.h"
 #include "../src/Console.h"
+#include "../src/InstructionTrace.h"
+#include "../src/CpuSnapshot.h"
 
 int passed = 0;
 int failed = 0;
@@ -162,6 +166,49 @@ void testBus(){
 	check(heardCount == 2, "listener is not called for a refused write");
 }
 
+//find() must land in the right chip at every first byte, last byte and gap, whatever order the chips came in
+void testBusSearch(){
+	printf("--Bus search--\n");
+	Ram c1(0x10, "C1"), c2(0x10, "C2"), c3(0x10, "C3"), c4(0x01, "C4"), c5(0x100, "C5");
+	Ram* chips[] = {&c1, &c2, &c3, &c4, &c5};
+	for(int i = 0; i < 5; ++i){
+		for(unsigned int j = 0; j < chips[i]->size(); ++j) chips[i]->write((Word)j, (Byte)(i + 1));	//chip i is full of i+1
+	}
+
+	Bus bus;
+	check(bus.attach(0x5000, 0x500F, &c3) && bus.attach(0x0100, 0x010F, &c1) && bus.attach(0xFF00, 0xFFFF, &c5)
+		&& bus.attach(0x2000, 0x200F, &c2) && bus.attach(0x7000, 0x7000, &c4), "attach five chips in mixed order");
+
+	struct Probe { Word address; Byte chip; };		//chip 0 = a gap, no chip there
+	Probe probes[] = {
+		{0x0000, 0}, {0x00FF, 0}, {0x0100, 1}, {0x010F, 1}, {0x0110, 0}, {0x1FFF, 0},
+		{0x2000, 2}, {0x200F, 2}, {0x2010, 0}, {0x4FFF, 0}, {0x5000, 3}, {0x500F, 3},
+		{0x6FFF, 0}, {0x7000, 4}, {0x7001, 0}, {0xFEFF, 0}, {0xFF00, 5}, {0xFFFF, 5}
+	};
+	bool allRight = true;
+	for(unsigned int i = 0; i < sizeof(probes) / sizeof(probes[0]); ++i){
+		Byte want = probes[i].chip == 0 ? 0xFF : probes[i].chip;
+		if(bus.peek(probes[i].address) != want) allRight = false;
+	}
+	check(allRight, "every first byte, last byte and gap finds the right chip (or none)");
+
+	check(bus.read(0x7001) == 0xFF && bus.getFault().type == FaultType::UnmappedAccess, "an address in a gap is still a fault");
+	bus.clearFault();
+	check(bus.write(0x500A, 0x99) && c3.read(0x0A) == 0x99 && c3.read(0x09) == 3, "the offset is counted from the chip's own start");
+
+	Ram fits(0x10, "FITS");
+	Ram all(0x10000, "ALL");
+	check(bus.attach(0x0110, 0x011F, &fits) && bus.peek(0x0110) == 0 && bus.peek(0x010F) == 1, "a chip added between two others is found");
+	check(!bus.attach(0x0000, 0xFFFF, &all) && !bus.attach(0x6FFF, 0x7000, &fits), "ranges over other chips are still refused");
+
+	Bus empty;
+	check(empty.peek(0x1234) == 0xFF && empty.read(0x0000) == 0xFF && empty.hasFault(), "a Bus with no chips finds nothing");
+
+	Bus whole;
+	check(whole.attach(0x0000, 0xFFFF, &all) && whole.write(0xFFFF, 7) && all.read(0xFFFF) == 7 && whole.peek(0x0000) == 0,
+		"one chip over all 64 KB works at both ends");
+}
+
 void testOpcodes(){
 	printf("--OpcodeTable--\n");
 	int validCount = 0;
@@ -183,6 +230,10 @@ void testOpcodes(){
 	check(!OpcodeTable::lookup(0xFF).valid && !OpcodeTable::lookup(0x02).valid, "unused bytes are invalid");
 	check(OpcodeTable::find("add") == 0x30 && OpcodeTable::find("Pushf") == 0x82, "find ignores upper/lower case");
 	check(OpcodeTable::find("LOAD") == -1 && OpcodeTable::find("") == -1 && OpcodeTable::find("ADDX") == -1, "unknown mnemonic gives -1");
+	check(OpcodeTable::find("PUSH") == 0x80 && OpcodeTable::find("pushf") == 0x82 && OpcodeTable::find("PUS") == -1,
+		"a mnemonic that starts another one is not mixed up with it");
+	check(OpcodeTable::find(" ADD") == -1 && OpcodeTable::find("AD D") == -1 && OpcodeTable::find("ADD\n") == -1, "spaces are not ignored");
+	check(OpcodeTable::find("???") == -1, "the invalid-slot name is not a mnemonic");
 }
 
 void testFlagTable(){
@@ -589,6 +640,146 @@ void testCpuSetters(){
 		&& m.bus.peek(0x8000) == reference.bus.peek(0x8000), "after undo the program finishes exactly like a run without undo");
 }
 
+void testInstructionTrace(){
+	printf("--InstructionTrace (circular queue)--\n");
+	const int CAP = InstructionTrace::CAPACITY;
+	InstructionTrace q;
+	TraceEntry e;
+	check(q.isEmpty() && !q.isFull() && q.size() == 0, "a new queue is empty");
+	check(!q.dequeue(e), "dequeue on an empty queue is refused");
+
+	q.enqueue(0x0010, 0x11);
+	q.enqueue(0x0013, 0x30);
+	check(q.size() == 2 && q.at(0).pc == 0x0010 && q.at(1).pc == 0x0013 && q.at(1).opcode == 0x30, "enqueue adds at the rear, at(0) is the oldest");
+	check(q.dequeue(e) && e.pc == 0x0010 && e.opcode == 0x11 && q.size() == 1, "dequeue takes from the front: first in, first out");
+	check(q.dequeue(e) && e.pc == 0x0013 && q.isEmpty(), "dequeue until it is empty again");
+
+	for(int i = 0; i < CAP; ++i) q.enqueue((Word)i, (Byte)i);
+	check(q.isFull() && q.size() == CAP && q.at(0).pc == 0 && q.at(CAP - 1).pc == CAP - 1, "full after CAPACITY entries");
+	q.enqueue(0x00AA, 0xAA);
+	check(q.size() == CAP && q.at(0).pc == 1 && q.at(CAP - 1).pc == 0x00AA, "when full, the oldest is dropped to make room");
+
+	for(int i = 0; i < 3 * CAP + 5; ++i) q.enqueue((Word)(0x100 + i), 0);
+	bool ordered = true;
+	for(int i = 1; i < q.size(); ++i){
+		if(q.at(i).pc != q.at(i - 1).pc + 1) ordered = false;
+	}
+	check(ordered && q.at(CAP - 1).pc == 0x100 + 3 * CAP + 4, "still oldest-to-newest after the front wraps around many times");
+	check(q.at(-1).pc == 0 && q.at(CAP).pc == 0 && q.at(CAP).opcode == 0, "at() outside 0..size-1 gives an empty entry");
+	q.clear();
+	check(q.isEmpty() && !q.dequeue(e), "clear empties it");
+
+	//the CPU keeps one: after a fault it shows the way the program got there
+	Machine m;
+	Byte program[] = {
+		0x11, 0x00, 0x05,			//0x0000 LDI R0, 5
+		0x41, 0x00,					//0x0003 DEC R0      loop
+		0x62, 0x03, 0x00,			//0x0005 JNZ 0x0003
+		0xFF						//0x0008 not an instruction
+	};
+	RUN(m, program);
+	const InstructionTrace& t = m.cpu.getTrace();
+	check(t.size() == 12 && t.at(0).pc == 0x0000 && t.at(0).opcode == OP_LDI && t.at(1).opcode == OP_DEC,
+		"the CPU records every instruction it starts (1 LDI + 5 x DEC, JNZ + the bad byte)");
+	check(t.at(11).pc == 0x0008 && t.at(11).opcode == 0xFF && t.at(10).pc == 0x0005 && t.at(10).opcode == OP_JNZ,
+		"the failing instruction is the newest entry, the one before it shows how we got there");
+
+	Byte longLoop[] = {
+		0x11, 0x00, 0x00,			//0x0000 LDI R0, 0
+		0x40, 0x00,					//0x0003 INC R0      loop
+		0x62, 0x03, 0x00,			//0x0005 JNZ 0x0003  256 times round
+		0x01						//0x0008 HLT
+	};
+	RUN(m, longLoop);
+	check(t.size() == CAP && t.at(CAP - 1).opcode == OP_HLT && t.at(CAP - 2).opcode == OP_JNZ, "a long run keeps only the last CAPACITY instructions");
+	m.cpu.reset();
+	check(t.isEmpty(), "reset empties the trace");
+}
+
+void testCpuPrint(){
+	printf("--operator<< (friend function)--\n");
+	Machine m;
+	Byte program[] = {
+		0x11, 0x00, 0x2A,			//LDI R0, 0x2A
+		0x11, 0x07, 0x80,			//LDI R7, 0x80   sets N
+		0x01						//HLT
+	};
+	RUN(m, program);
+	std::ostringstream out;
+	out << m.cpu;
+	check(out.str() == "PC=0x0007 SP=0xFFFF R0=0x2A R1=0x00 R2=0x00 R3=0x00 R4=0x00 R5=0x00 R6=0x00 R7=0x80 flags=--N- Halted cycles=7",
+		"cout << cpu prints registers, flags, state and cycles on one line");
+
+	Byte bad[] = {0x00, 0xFF};
+	RUN(m, bad);
+	std::ostringstream faulted;
+	faulted << m.cpu;
+	check(faulted.str().find("PC=0x0001") == 0 && faulted.str().find("Faulted (InvalidOpcode)") != std::string::npos,
+		"a faulted CPU prints the fault type");
+
+	std::ostringstream chained;
+	chained << "[" << m.cpu << "]";
+	check(chained.str() == "[" + faulted.str() + "]", "returns the stream, so << can be chained");
+}
+
+void testCpuSnapshot(){
+	printf("--CpuSnapshot (friend class)--\n");
+	Machine m;
+	m.cpu.setPC(0x1234);
+	m.cpu.setReg(3, 9);
+	m.cpu.setFlags(0x0F);
+	CpuSnapshot fresh;
+	fresh.restore(m.cpu);
+	check(m.cpu.getPC() == 0 && m.cpu.getReg(3) == 0 && m.cpu.getSP() == MemoryMap::STACK_END && m.cpu.getFlags() == 0
+		&& m.cpu.getState() == CpuState::Running && m.cpu.getCycles() == 0 && m.cpu.getTrace().isEmpty(),
+		"an empty snapshot is a CPU straight after reset()");
+
+	//count R0 up to 20. No memory writes, so the snapshot alone is enough to go back
+	Byte program[] = {
+		0x11, 0x00, 0x00,			//0x0000 LDI R0, 0
+		0x40, 0x00,					//0x0003 INC R0      loop
+		0x3A, 0x00, 0x14,			//0x0005 CMPI R0, 20
+		0x62, 0x03, 0x00,			//0x0008 JNZ 0x0003
+		0x01						//0x000B HLT
+	};
+	Machine reference;
+	RUN(reference, program);
+
+	m.rom.load(program, sizeof(program));
+	m.cpu.reset();
+	m.cpu.run(9);
+	CpuSnapshot save(m.cpu);
+	Word pcThen = m.cpu.getPC();
+	Byte r0Then = m.cpu.getReg(0), flagsThen = m.cpu.getFlags();
+	unsigned long cyclesThen = m.cpu.getCycles();
+	int traceThen = m.cpu.getTrace().size();
+	Word lastThen = m.cpu.getTrace().at(traceThen - 1).pc;
+
+	m.cpu.run(100000);
+	check(m.cpu.getState() == CpuState::Halted && m.cpu.getPC() != pcThen, "the program ran on to the end");
+	save.restore(m.cpu);
+	check(m.cpu.getPC() == pcThen && m.cpu.getReg(0) == r0Then && m.cpu.getFlags() == flagsThen
+		&& m.cpu.getCycles() == cyclesThen && m.cpu.getState() == CpuState::Running,
+		"restore puts registers, PC, flags, cycles and state back");
+	check(m.cpu.getTrace().size() == traceThen && m.cpu.getTrace().at(traceThen - 1).pc == lastThen, "the instruction trace goes back too");
+	m.cpu.run(100000);
+	check(m.cpu.getState() == CpuState::Halted && m.cpu.getReg(0) == reference.cpu.getReg(0) && m.cpu.getPC() == reference.cpu.getPC()
+		&& m.cpu.getCycles() == reference.cpu.getCycles(), "after restore the program finishes exactly like a run without it");
+
+	//the public setters cannot put a fault back (setState only keeps or clears one); the friend class can
+	Byte bad[] = {0x00, 0xFF};
+	RUN(m, bad);
+	Fault before = m.cpu.getFault();
+	CpuSnapshot crashed(m.cpu);
+	m.cpu.reset();
+	crashed.restore(m.cpu);
+	const Fault& after = m.cpu.getFault();
+	check(m.cpu.getState() == CpuState::Faulted && after.type == FaultType::InvalidOpcode && after.type == before.type
+		&& after.pc == before.pc && after.address == before.address && after.message == before.message,
+		"restore brings back a fault with all its details");
+	check(m.cpu.step() == StepResult::Fault && m.cpu.getPC() == 0x0001, "and the CPU acts faulted again");
+}
+
 void testIoPorts(){
 	printf("--IoPorts--\n");
 	IoPorts io;
@@ -725,6 +916,7 @@ int main(){
 	testFault();
 	testRamRom();
 	testBus();
+	testBusSearch();
 	testOpcodes();
 	testFlagTable();
 	testInstructions();
@@ -733,6 +925,9 @@ int main(){
 	testDisassembler();
 	testPeekPoke();
 	testCpuSetters();
+	testInstructionTrace();
+	testCpuPrint();
+	testCpuSnapshot();
 	testIoPorts();
 	testConsole();
 

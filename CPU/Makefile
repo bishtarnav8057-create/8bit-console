@@ -12,7 +12,7 @@ CXXFLAGS = -std=c++11 -Wall -Wextra
 # Aashish: memory, bus and CPU
 CORE = Aashish/src/Bits.cpp Aashish/src/Fault.cpp Aashish/src/Ram.cpp Aashish/src/Rom.cpp \
        Aashish/src/Bus.cpp Aashish/src/Opcodes.cpp Aashish/src/CPU.cpp Aashish/src/Disassembler.cpp \
-       Aashish/src/IoPorts.cpp Aashish/src/Console.cpp
+       Aashish/src/IoPorts.cpp Aashish/src/Console.cpp Aashish/src/InstructionTrace.cpp Aashish/src/CpuSnapshot.cpp
 
 # Arnav and Piyush: parser, operand checker, assembler, system state
 TOOLS = src/Parser.cpp src/OperandCheck.cpp src/Assembler.cpp src/SystemState.cpp

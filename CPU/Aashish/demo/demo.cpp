@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <iostream>
 #include <string>
 
 #include "../src/Bits.h"
@@ -246,6 +247,15 @@ void partFaults(Board& c){
 	}
 	printf("\n  (\"PUSH R0 forever\" filled all %u stack bytes first; SP stopped at 0x%04X.)\n", c.stack.size(), c.cpu.getSP());
 	printf("  After a fault the CPU stays stopped until reset(), and PC points at the bad instruction.\n");
+
+	//the CPU's instruction trace (a circular queue of the last 16) answers "how did it get there?"
+	const InstructionTrace& trace = c.cpu.getTrace();
+	printf("\n  The last 4 of the %d instructions the CPU keeps in its trace (newest = the one that failed):\n", trace.size());
+	for(int i = (trace.size() > 4 ? trace.size() - 4 : 0); i < trace.size(); ++i){
+		Byte length = 0;
+		printf("    %s\n", c.dis.line(trace.at(i).pc, length).c_str());
+	}
+	std::cout << "\n  std::cout << cpu:  " << c.cpu << "\n";
 	pause();
 }
 
