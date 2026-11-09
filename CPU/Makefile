@@ -3,7 +3,9 @@
 #
 #   calc              the calculator: type sums, the CPU works them out
 #   calc ARGS=demo    the calculator showing a fixed list of examples
-#   test              every test suite (CPU, parser, operand check, assembler, calculator)
+#   dot               the key bridge: move a dot with WASD or the arrows (Windows console)
+#   debug ARGS="programs/sum.asm"   step debugger: step, step back, run; saves trace.csv
+#   test              every test suite (CPU, parser, operand check, assembler, calculator, dot, debugger)
 #   clean             delete the built .exe files
 
 CXX      = g++
@@ -19,9 +21,13 @@ TOOLS = src/Parser.cpp src/OperandCheck.cpp src/Assembler.cpp src/SystemState.cp
 
 CALC = calc/Calculator.cpp
 
-HDR = $(wildcard Aashish/src/*.h) $(wildcard src/*.h) $(wildcard calc/*.h)
+# Aashish: step debugger
+DEBUG = debug/Debugger.cpp
 
-TESTS = test_cpu.exe test_parser.exe test_operand_check.exe test_assembler.exe test_calc.exe test_dot.exe
+HDR = $(wildcard Aashish/src/*.h) $(wildcard src/*.h) $(wildcard calc/*.h) $(wildcard debug/*.h)
+
+TESTS = test_cpu.exe test_parser.exe test_operand_check.exe test_assembler.exe test_calc.exe test_dot.exe \
+        test_debugger.exe
 
 calc: calc.exe
 	./calc.exe $(ARGS)
@@ -35,6 +41,12 @@ dot: dot.exe
 dot.exe: $(CORE) $(TOOLS) $(HDR) demo/dot.cpp
 	$(CXX) $(CXXFLAGS) $(CORE) $(TOOLS) demo/dot.cpp -o $@
 
+debug: debug.exe
+	./debug.exe $(ARGS)
+
+debug.exe: $(CORE) $(TOOLS) $(DEBUG) $(HDR) demo/debug.cpp
+	$(CXX) $(CXXFLAGS) $(CORE) $(TOOLS) $(DEBUG) demo/debug.cpp -o $@
+
 test: $(TESTS)
 	./test_cpu.exe
 	./test_parser.exe
@@ -42,6 +54,7 @@ test: $(TESTS)
 	./test_assembler.exe
 	./test_calc.exe
 	./test_dot.exe
+	./test_debugger.exe
 
 test_cpu.exe: $(CORE) $(HDR) Aashish/tests/test_cpu.cpp
 	$(CXX) $(CXXFLAGS) $(CORE) Aashish/tests/test_cpu.cpp -o $@
@@ -62,8 +75,12 @@ test_calc.exe: $(CORE) $(TOOLS) $(CALC) $(HDR) tests/test_calc.cpp programs/calc
 test_dot.exe: $(CORE) $(TOOLS) $(HDR) tests/test_dot.cpp
 	$(CXX) $(CXXFLAGS) $(CORE) $(TOOLS) tests/test_dot.cpp -o $@
 
+# the .asm files are read when the test runs, so they are not build dependencies
+test_debugger.exe: $(CORE) $(TOOLS) $(DEBUG) $(HDR) tests/test_debugger.cpp
+	$(CXX) $(CXXFLAGS) $(CORE) $(TOOLS) $(DEBUG) tests/test_debugger.cpp -o $@
+
 # "del" works in cmd/PowerShell, "rm" in Git Bash/Linux
 clean:
-	-del calc.exe dot.exe $(TESTS) || rm -f calc.exe dot.exe $(TESTS)
+	-del calc.exe dot.exe debug.exe $(TESTS) || rm -f calc.exe dot.exe debug.exe $(TESTS)
 
-.PHONY: calc dot test clean
+.PHONY: calc dot debug test clean
