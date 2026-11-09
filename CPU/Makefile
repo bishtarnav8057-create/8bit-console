@@ -21,7 +21,7 @@ CALC = calc/Calculator.cpp
 
 HDR = $(wildcard Aashish/src/*.h) $(wildcard src/*.h) $(wildcard calc/*.h)
 
-TESTS = test_cpu.exe test_parser.exe test_operand_check.exe test_assembler.exe test_calc.exe
+TESTS = test_cpu.exe test_parser.exe test_operand_check.exe test_assembler.exe test_calc.exe test_dot.exe
 
 calc: calc.exe
 	./calc.exe $(ARGS)
@@ -29,12 +29,19 @@ calc: calc.exe
 calc.exe: $(CORE) $(TOOLS) $(CALC) $(HDR) demo/calc.cpp
 	$(CXX) $(CXXFLAGS) $(CORE) $(TOOLS) $(CALC) demo/calc.cpp -o $@
 
+dot: dot.exe
+	./dot.exe
+
+dot.exe: $(CORE) $(TOOLS) $(HDR) demo/dot.cpp
+	$(CXX) $(CXXFLAGS) $(CORE) $(TOOLS) demo/dot.cpp -o $@
+
 test: $(TESTS)
 	./test_cpu.exe
 	./test_parser.exe
 	./test_operand_check.exe
 	./test_assembler.exe
 	./test_calc.exe
+	./test_dot.exe
 
 test_cpu.exe: $(CORE) $(HDR) Aashish/tests/test_cpu.cpp
 	$(CXX) $(CXXFLAGS) $(CORE) Aashish/tests/test_cpu.cpp -o $@
@@ -51,8 +58,12 @@ test_assembler.exe: $(CORE) $(TOOLS) $(HDR) tests/test_assembler.cpp
 test_calc.exe: $(CORE) $(TOOLS) $(CALC) $(HDR) tests/test_calc.cpp programs/calc.asm
 	$(CXX) $(CXXFLAGS) $(CORE) $(TOOLS) $(CALC) tests/test_calc.cpp -o $@
 
+# dot.asm is read when the test runs, so it is not a build dependency
+test_dot.exe: $(CORE) $(TOOLS) $(HDR) tests/test_dot.cpp
+	$(CXX) $(CXXFLAGS) $(CORE) $(TOOLS) tests/test_dot.cpp -o $@
+
 # "del" works in cmd/PowerShell, "rm" in Git Bash/Linux
 clean:
-	-del calc.exe $(TESTS) || rm -f calc.exe $(TESTS)
+	-del calc.exe dot.exe $(TESTS) || rm -f calc.exe dot.exe $(TESTS)
 
-.PHONY: calc test clean
+.PHONY: calc dot test clean
