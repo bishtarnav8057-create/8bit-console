@@ -20,6 +20,8 @@
 #include "CalculatorTab.h"
 #include "GameTab.h"
 #include "Theme.h"
+#include "Programs.h"
+#include "screens/ConsoleScreen.h"
 #include "screens/HelpScreen.h"
 #include "screens/HomeScreen.h"
 #include "widgets/PixelDialog.h"
@@ -118,6 +120,8 @@ MainWindow::MainWindow()
     HomeScreen* home = new HomeScreen(stack);
     add(ScreenId::Home, home);
     add(ScreenId::Calculator, new TabScreen("CALCULATOR", new CalculatorTab(), stack));
+    consoleScreen = new ConsoleScreen(stack);
+    add(ScreenId::Console, consoleScreen);
     GameTab* games = new GameTab();
     TabScreen* arcade = new TabScreen("ARCADE", games, stack);
     add(ScreenId::Snake, arcade);
@@ -269,15 +273,49 @@ void MainWindow::showSettings()
 
 void MainWindow::saveShots(const QString& dir)
 {
-    const ScreenId ids[] = {ScreenId::Home, ScreenId::Calculator, ScreenId::Snake, ScreenId::Help};
-    const char* names[] = {"home", "calculator", "arcade", "help"};
     const bool anim = Prefs::animations;
     Prefs::animations = false;
-    for (int i = 0; i < 4; i++)
-    {
-        go(ids[i]);
+    auto shot = [&](const QString& name) {
         QApplication::processEvents();
-        grab().save(QDir(dir).filePath(QString("%1.png").arg(names[i])));
-    }
+        grab().save(QDir(dir).filePath(name + ".png"));
+    };
+    auto key = [&](QWidget* to, int k, bool down) {
+        QKeyEvent e(down ? QEvent::KeyPress : QEvent::KeyRelease, k, Qt::NoModifier);
+        QApplication::sendEvent(to, &e);
+    };
+
+    go(ScreenId::Home);
+    shot("01-home");
+
+    go(ScreenId::Console);   // loads dot.asm
+    key(consoleScreen, Qt::Key_Right, true);
+    consoleScreen->runFrames(6);
+    key(consoleScreen, Qt::Key_Right, false);
+    key(consoleScreen, Qt::Key_Down, true);
+    key(consoleScreen, Qt::Key_Left, true);
+    consoleScreen->runFrames(3);
+    consoleScreen->suspend();
+    key(consoleScreen, Qt::Key_Down, true);   // held while the picture is taken: the pad LED is lit
+    shot("03-console-dot");
+    key(consoleScreen, Qt::Key_Down, false);
+    key(consoleScreen, Qt::Key_Left, false);
+    const QString tests = QString(PIXEL8_GUI_DIR) + "/tests/programs/";
+    consoleScreen->load(findProgram("sum.asm"));
+    consoleScreen->runFrames(5);
+    shot("04-console-sum-halted");
+    consoleScreen->load(tests + "fault.asm");
+    consoleScreen->runFrames(1);
+    shot("05-console-fault");
+    consoleScreen->load(tests + "bad.asm");
+    shot("06-console-errors");
+    consoleScreen->load(tests + "hello.asm");
+    consoleScreen->runFrames(1);
+    shot("07-console-output");
+    consoleScreen->load(findProgram("dot.asm"));
+    consoleScreen->suspend();
+
+    go(ScreenId::Help);
+    shot("20-help");
+    go(ScreenId::Home);
     Prefs::animations = anim;
 }

@@ -57,11 +57,14 @@ set(GUI_SOURCES
     src/screens/Screen.h
     src/screens/HomeScreen.h src/screens/HomeScreen.cpp
     src/screens/HelpScreen.h src/screens/HelpScreen.cpp
+    src/screens/ConsoleScreen.h src/screens/ConsoleScreen.cpp
+    src/widgets/CpuViews.h src/widgets/CpuViews.cpp
+    src/Programs.h src/Programs.cpp
 )
 
 add_executable(pixel8_gui WIN32 ${GUI_SOURCES} ${CPU_SOURCES} resources.qrc)
 target_include_directories(pixel8_gui PRIVATE ${CPU_DIR} src)
-target_compile_definitions(pixel8_gui PRIVATE PIXEL8_CPU_DIR="${CPU_DIR}" APP_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(pixel8_gui PRIVATE PIXEL8_CPU_DIR="${CPU_DIR}" APP_VERSION="${PROJECT_VERSION}" PIXEL8_GUI_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(pixel8_gui PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 
 # Qt-free tests (game rules, sprite grids, snake segments):  ctest

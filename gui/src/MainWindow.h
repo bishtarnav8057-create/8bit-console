@@ -9,6 +9,7 @@
 #include "screens/Screen.h"
 
 class QStackedWidget;
+class ConsoleScreen;
 class HelpScreen;
 class PixelWipe;
 
@@ -37,6 +38,7 @@ private:
     ScreenId currentId = ScreenId::Home;
     ScreenId beforeHelp = ScreenId::Home;
     HelpScreen* help;
+    ConsoleScreen* consoleScreen;
     PixelWipe* wipe;
 };
 
