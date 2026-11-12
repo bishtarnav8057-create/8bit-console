@@ -76,7 +76,7 @@ int main(int argc, char* argv[])
     {
         window.resize(1280, 800);
         QApplication::processEvents();
-        window.grab().save(app.arguments().at(at + 1) + "/window.png");
+        window.saveShots(app.arguments().at(at + 1));
         return 0;
     }
     return app.exec();

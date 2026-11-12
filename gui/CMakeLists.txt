@@ -53,6 +53,10 @@ set(GUI_SOURCES
     src/art/SpriteCache.h src/art/SpriteCache.cpp
     src/model/SnakeSegments.h src/model/SnakeSegments.cpp
     src/widgets/Pixel.h src/widgets/Pixel.cpp
+    src/widgets/PixelDialog.h src/widgets/PixelDialog.cpp
+    src/screens/Screen.h
+    src/screens/HomeScreen.h src/screens/HomeScreen.cpp
+    src/screens/HelpScreen.h src/screens/HelpScreen.cpp
 )
 
 add_executable(pixel8_gui WIN32 ${GUI_SOURCES} ${CPU_SOURCES} resources.qrc)
