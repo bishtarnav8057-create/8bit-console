@@ -1,0 +1,9 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/">
+        <file alias="fonts/PressStart2P-Regular.ttf">assets/fonts/PressStart2P-Regular.ttf</file>
+        <file alias="fonts/JetBrainsMono-Regular.ttf">assets/fonts/JetBrainsMono-Regular.ttf</file>
+        <file alias="fonts/JetBrainsMono-Bold.ttf">assets/fonts/JetBrainsMono-Bold.ttf</file>
+        <file alias="theme/theme.qss">assets/theme/theme.qss</file>
+    </qresource>
+</RCC>

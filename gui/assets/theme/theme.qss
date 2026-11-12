@@ -1,0 +1,85 @@
+/* PIXEL-8 "Phosphor & Amber" stylesheet for the standard Qt widgets (plan 5.6, 12.5).
+   Pixel widgets (buttons, panels, LEDs, boards) are painted in code from Theme.h.
+   Same colour values as Theme.h. No font rules here: fonts are set in code. */
+
+QMainWindow, QStackedWidget { background: #12141F; }
+
+QToolTip {
+    background: #1A1D2E; color: #ECE8D8; border: 2px solid #454C73; padding: 4px 6px;
+}
+
+QSpinBox {
+    background: #242840; color: #ECE8D8; border: 2px solid #454C73;
+    min-height: 40px; padding: 0 10px;
+    selection-background-color: #FFB547; selection-color: #1A1206;
+}
+QSpinBox:focus { border-color: #FFB547; }
+QSpinBox::up-button, QSpinBox::down-button { width: 0; border: none; }
+
+QTableWidget, QTableView {
+    background: #12141F; alternate-background-color: #151827; color: #ECE8D8;
+    gridline-color: #2E3452; border: 2px solid #2E3452;
+    selection-background-color: #242840; selection-color: #ECE8D8;
+}
+QTableView::item { padding: 0 8px; border: none; }
+QTableView::item:selected { background: #242840; color: #ECE8D8; border-left: 2px solid #FFB547; }
+QHeaderView { background: #1A1D2E; }
+QHeaderView::section {
+    background: #1A1D2E; color: #A9ADC6; border: none; border-bottom: 2px solid #2E3452;
+    padding: 6px 8px;
+}
+QTableCornerButton::section { background: #1A1D2E; border: none; }
+
+QScrollBar:vertical { background: #12141F; width: 10px; margin: 0; border: none; }
+QScrollBar:horizontal { background: #12141F; height: 10px; margin: 0; border: none; }
+QScrollBar::handle:vertical { background: #454C73; min-height: 24px; }
+QScrollBar::handle:horizontal { background: #454C73; min-width: 24px; }
+QScrollBar::handle:hover { background: #FFB547; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; border: none; background: none; }
+QScrollBar::add-page, QScrollBar::sub-page { background: none; }
+
+QListWidget {
+    background: #12141F; color: #A9ADC6; border: none; outline: none;
+}
+QListWidget::item { padding: 10px 12px; border-left: 2px solid transparent; }
+QListWidget::item:hover { color: #ECE8D8; background: #1A1D2E; }
+QListWidget::item:selected { color: #FFB547; background: #242840; border-left: 2px solid #FFB547; }
+
+QPlainTextEdit, QTextBrowser {
+    background: #08130E; color: #7DF09B; border: 2px solid #2E3452;
+    selection-background-color: #2E8A4C; selection-color: #ECE8D8;
+}
+
+QCheckBox { color: #ECE8D8; spacing: 12px; padding: 4px 0; }
+QCheckBox:focus { color: #FFB547; }
+QCheckBox::indicator { width: 14px; height: 14px; border: 2px solid #454C73; background: #242840; }
+QCheckBox::indicator:checked { background: #7DF09B; border-color: #2E8A4C; }
+QCheckBox::indicator:hover { border-color: #FFB547; }
+
+QMenu { background: #1A1D2E; color: #ECE8D8; border: 2px solid #454C73; padding: 4px; }
+QMenu::item { padding: 6px 16px; }
+QMenu::item:selected { background: #242840; color: #FFB547; }
+
+QLineEdit, QComboBox {
+    background: #242840; color: #ECE8D8; border: 2px solid #454C73; padding: 4px 8px;
+    selection-background-color: #FFB547; selection-color: #1A1206;
+}
+QLineEdit:focus, QComboBox:focus { border-color: #FFB547; }
+QComboBox QAbstractItemView { background: #1A1D2E; color: #ECE8D8; selection-background-color: #242840; }
+
+/* plain QPushButton (file dialogs etc.); PixelButton paints itself */
+QPushButton {
+    background: #242840; color: #ECE8D8; border: 2px solid #454C73; padding: 6px 14px;
+}
+QPushButton:hover { border-color: #FFB547; }
+QPushButton:pressed { background: #1A1D2E; }
+QPushButton:disabled { color: #80859F; background: #1A1D2E; border-color: #2E3452; }
+
+QGroupBox { border: 2px solid #2E3452; background: #1A1D2E; margin-top: 22px; padding: 12px 8px 8px 8px; color: #A9ADC6; }
+QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }
+QTabWidget::pane { border: 2px solid #2E3452; background: #12141F; }
+QTabBar::tab { background: #1A1D2E; color: #A9ADC6; padding: 8px 16px; border: 2px solid #2E3452; margin-right: 2px; }
+QTabBar::tab:selected { color: #FFB547; border-bottom-color: #FFB547; }
+QMenuBar { background: #1A1D2E; color: #ECE8D8; }
+QMenuBar::item:selected { background: #242840; color: #FFB547; }
+QStatusBar { background: #1A1D2E; color: #A9ADC6; }

@@ -6,12 +6,13 @@
 # The CPU sources are compiled in place from ../CPU (nothing in CPU/ is changed).
 
 cmake_minimum_required(VERSION 3.16)
-project(Pixel8Gui LANGUAGES CXX)
+project(Pixel8Gui VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 
 get_filename_component(CPU_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../CPU" ABSOLUTE)
 
@@ -40,20 +41,32 @@ set(CPU_SOURCES
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 
-add_executable(pixel8_gui WIN32
+set(GUI_SOURCES
     src/main.cpp
     src/MainWindow.h   src/MainWindow.cpp
     src/CalculatorTab.h src/CalculatorTab.cpp
     src/GameTab.h      src/GameTab.cpp
     src/GameBoard.h    src/GameBoard.cpp
     src/Games.h        src/Games.cpp
-    ${CPU_SOURCES}
+    src/Theme.h        src/Theme.cpp
+    src/art/Sprites.h  src/art/Sprites.cpp
+    src/art/SpriteCache.h src/art/SpriteCache.cpp
+    src/model/SnakeSegments.h src/model/SnakeSegments.cpp
+    src/widgets/Pixel.h src/widgets/Pixel.cpp
 )
-target_include_directories(pixel8_gui PRIVATE ${CPU_DIR})
-target_compile_definitions(pixel8_gui PRIVATE PIXEL8_CPU_DIR="${CPU_DIR}")
+
+add_executable(pixel8_gui WIN32 ${GUI_SOURCES} ${CPU_SOURCES} resources.qrc)
+target_include_directories(pixel8_gui PRIVATE ${CPU_DIR} src)
+target_compile_definitions(pixel8_gui PRIVATE PIXEL8_CPU_DIR="${CPU_DIR}" APP_VERSION="${PROJECT_VERSION}")
 target_link_libraries(pixel8_gui PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 
-# the rules of the games can be tested without Qt:  ctest   or   build/test_games
+# Qt-free tests (game rules, sprite grids, snake segments):  ctest
 add_executable(test_games tests/test_games.cpp src/Games.cpp)
+add_executable(test_sprites tests/test_sprites.cpp src/art/Sprites.cpp)
+add_executable(test_snake_segments tests/test_snake_segments.cpp src/model/SnakeSegments.cpp src/Games.cpp)
+target_include_directories(test_sprites PRIVATE src)
+target_include_directories(test_snake_segments PRIVATE src)
 enable_testing()
 add_test(NAME games COMMAND test_games)
+add_test(NAME sprites COMMAND test_sprites)
+add_test(NAME snake_segments COMMAND test_snake_segments)
