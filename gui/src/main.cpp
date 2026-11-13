@@ -55,7 +55,8 @@ int main(int argc, char* argv[])
 
     QApplication app(argc, argv);
     QCoreApplication::setOrganizationName("NULL Pointers");
-    QCoreApplication::setApplicationName("PIXEL-8");
+    // --shots keeps its own settings, so a test run never changes the real best score or settings
+    QCoreApplication::setApplicationName(app.arguments().contains("--shots") ? "PIXEL-8-shots" : "PIXEL-8");
     QCoreApplication::setApplicationVersion(APP_VERSION);
 
     app.setStyle("Fusion");   // the base style that obeys QSS and the palette the same way everywhere

@@ -4,6 +4,7 @@
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QDir>
+#include <QEventLoop>
 #include <QHBoxLayout>
 #include <QImage>
 #include <QKeyEvent>
@@ -42,6 +43,7 @@ public:
 
     void play(const QPixmap& old)
     {
+        setGeometry(parentWidget()->rect());   // first: the blocks are counted from this size
         image = old.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied);
         const int cols = (width() + 7) / 8, rows = (height() + 7) / 8;
         order.resize(cols * rows);
@@ -49,7 +51,6 @@ public:
         std::shuffle(order.begin(), order.end(), std::mt19937(8));
         done = 0;
         steps = 0;
-        setGeometry(parentWidget()->rect());
         raise();
         show();
         timer.start();
@@ -156,8 +157,10 @@ void MainWindow::go(ScreenId id)
         gameScreen->setMode(id == ScreenId::Snake ? GameScreen::SNAKE : GameScreen::PONG);
 
     if (current()) current()->leave();
-    if (Prefs::animations && isVisible()) wipe->play(stack->grab());
+    const bool wipeIt = Prefs::animations && isVisible();
+    const QPixmap old = wipeIt ? stack->grab() : QPixmap();
     stack->setCurrentWidget(next);
+    if (wipeIt) wipe->play(old);   // after the switch: showing a page raises it, the wipe must be on top
     currentId = id;
     next->enter();
 }
@@ -339,6 +342,24 @@ void MainWindow::saveShots(const QString& dir)
 
     go(ScreenId::Help);
     shot("20-help");
+    go(ScreenId::Home);
+
+    // the pixel wipe, caught half way (about 3 of its 6 steps)
+    Prefs::animations = true;
+    go(ScreenId::Help);
+    {
+        QEventLoop wait;
+        QTimer::singleShot(75, &wait, &QEventLoop::quit);
+        wait.exec();
+    }
+    shot("24-wipe");
+    {
+        QEventLoop wait;
+        QTimer::singleShot(250, &wait, &QEventLoop::quit);   // let it finish
+        wait.exec();
+    }
+    Prefs::animations = false;
+    QApplication::processEvents();
     go(ScreenId::Home);
 
     // dialogs: take the picture from inside their event loop, then close them with Esc
