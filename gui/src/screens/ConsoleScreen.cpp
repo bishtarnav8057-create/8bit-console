@@ -1,5 +1,6 @@
 #include "screens/ConsoleScreen.h"
 
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGridLayout>
@@ -11,6 +12,8 @@
 #include <QPlainTextEdit>
 #include <QScrollBar>
 #include <QStackedWidget>
+#include <QTextBlock>
+#include <QTextCursor>
 #include <QVBoxLayout>
 
 #include "Aashish/src/Disassembler.h"
@@ -18,12 +21,14 @@
 #include "Programs.h"
 #include "Theme.h"
 #include "art/SpriteCache.h"
+#include "model/AsmNotes.h"
 #include "widgets/CpuViews.h"
 #include "widgets/Pixel.h"
 
 namespace
 {
     const int FRAME_MS = 50;   // about 20 frames a second, like demo/dot.cpp (handoff section 4)
+    const int CODE_MS = 500;   // CODE view: 2 lines a second, slow enough to read each one out loud
 
     QString hex4(int v) { return QString("0x%1").arg(v, 4, 16, QChar('0')).toUpper().replace("0X", "0x"); }
 
@@ -145,14 +150,15 @@ ConsoleScreen::ConsoleScreen(QWidget* parent) : Screen(parent)
     carts->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     carts->setTextElideMode(Qt::ElideRight);
     const QIcon cartIcon(SpriteCache::pixmap(SpriteId::Cartridge, 2));
-    const struct { const char* file; const char* about; } builtIn[] = {
-        {"dot.asm", "Move the dot"}, {"sum.asm", "Adds 10..1, halts"}};
+    const struct { const char* file; const char* about; bool code; } builtIn[] = {
+        {"dot.asm", "Move the dot", false}, {"sum.asm", "Adds 10..1, halts", true}};
     for (const auto& b : builtIn)
     {
         const QString found = findProgram(b.file);
         if (found.isEmpty()) continue;
         QListWidgetItem* it = new QListWidgetItem(cartIcon, QString("%1\n%2").arg(b.file, b.about), carts);
         it->setData(Qt::UserRole, found);
+        it->setData(Qt::UserRole + 1, b.code);   // opens in CODE view?
         it->setToolTip(found);
     }
     connect(carts, &QListWidget::itemClicked, this, [this](QListWidgetItem* it) {
@@ -176,6 +182,24 @@ ConsoleScreen::ConsoleScreen(QWidget* parent) : Screen(parent)
     QGridLayout* stage = new QGridLayout();
     screen = new VramView(screenPage);
     stage->addWidget(screen, 0, 0);
+    Panel* codePanel = new Panel("PROGRAM CODE", screenPage);
+    codePage = codePanel;
+    code = new QPlainTextEdit(codePanel);
+    code->setReadOnly(true);
+    code->setFocusPolicy(Qt::NoFocus);
+    code->setFont(Theme::mono(13));
+    code->setLineWrapMode(QPlainTextEdit::NoWrap);
+    nowLabel = Theme::text("", Theme::mono(15), Theme::textHi, codePanel);
+    nowLabel->setWordWrap(true);
+    nowLabel->setMinimumHeight(44);
+    codePanel->body()->addWidget(code, 1);
+    codePanel->body()->addWidget(nowLabel);
+    namesLine = Theme::text("", Theme::mono(13), Theme::cyan, codePanel);   // "R0 total = 45", from the file's Registers: comment
+    namesLine->setWordWrap(true);
+    namesLine->hide();
+    codePanel->body()->addWidget(namesLine);
+    codePage->hide();
+    stage->addWidget(codePage, 0, 0);
     card = new Panel(QString(), screenPage);
     card->setColours(Theme::bgPanel, Theme::lineStrong);
     card->setFixedWidth(360);
@@ -199,7 +223,8 @@ ConsoleScreen::ConsoleScreen(QWidget* parent) : Screen(parent)
     stepButton = new PixelButton("Step frame", PixelButton::Secondary, screenPage);
     PixelButton* resetButton = new PixelButton("Reset", PixelButton::Secondary, screenPage);
     resetButton->setGlyph(SpriteId::Reset);
-    for (PixelButton* b : {runButton, stepButton, resetButton})
+    viewButton = new PixelButton("Code", PixelButton::Secondary, screenPage);
+    for (PixelButton* b : {runButton, stepButton, resetButton, viewButton})
     {
         b->setFocusPolicy(Qt::NoFocus);   // the keys must keep reaching the program
         controls->addWidget(b);
@@ -207,6 +232,7 @@ ConsoleScreen::ConsoleScreen(QWidget* parent) : Screen(parent)
     connect(runButton, &QPushButton::clicked, this, [this] { state == State::Running ? pause() : run(); });
     connect(stepButton, &QPushButton::clicked, this, [this] { if (state == State::Paused) runFrames(1); });
     connect(resetButton, &QPushButton::clicked, this, [this] { const bool was = state == State::Running; reset(); if (was) run(); });
+    connect(viewButton, &QPushButton::clicked, this, [this] { setCodeView(!codeView); });
     controls->addStretch(1);
     sp->addLayout(controls);
     centre->addWidget(screenPage);
@@ -237,8 +263,7 @@ ConsoleScreen::ConsoleScreen(QWidget* parent) : Screen(parent)
     Panel* cpuPanel = new Panel("CPU", this);
     cpuPanel->setFixedWidth(290);
     cpuLine = Theme::text("", Theme::mono(13), Theme::cyan, cpuPanel);
-    regs = new RegisterView(4, cpuPanel, 56);
-    cyclesLine = Theme::text("", Theme::mono(13), Theme::textMid, cpuPanel);
+    regs = new RegisterView(4, cpuPanel, 56);    cyclesLine = Theme::text("", Theme::mono(13), Theme::textMid, cpuPanel);
     cpuPanel->body()->addWidget(cpuLine);
     cpuPanel->body()->addWidget(regs, 0, Qt::AlignLeft);
     cpuPanel->body()->addWidget(cyclesLine);
@@ -291,8 +316,13 @@ bool ConsoleScreen::load(const QString& file)
     name = QFileInfo(file).fileName();
     header->setTitle("CONSOLE  " + QString(QChar(0x00B7)) + "  " + name.toUpper());
     carts->setCurrentRow(-1);
+    bool wantCode = true;   // files that are not built in open in CODE view
     for (int i = 0; i < carts->count(); i++)
-        if (carts->item(i)->data(Qt::UserRole).toString() == file) carts->setCurrentRow(i);
+        if (carts->item(i)->data(Qt::UserRole).toString() == file)
+        {
+            carts->setCurrentRow(i);
+            wantCode = carts->item(i)->data(Qt::UserRole + 1).toBool();
+        }
 
     const AsmLoad a = assembleProgram(file);
     QVector<AsmError> errors = a.errors;
@@ -311,10 +341,22 @@ bool ConsoleScreen::load(const QString& file)
     }
 
     centre->setCurrentIndex(0);
+    lineAt = a.lineAt;
+    source.clear();
+    QFile f(file);
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text))
+        for (const QString& l : QString::fromUtf8(f.readAll()).split('\n')) source.push_back(l.toStdString());
+    regNames = AsmNotes::registerNames(source);
+    QStringList numbered;
+    for (size_t i = 0; i < source.size(); i++) numbered << QString("%1  %2").arg(i + 1, 3).arg(QString::fromStdString(source[i]));
+    code->setPlainText(numbered.join('\n'));
     frames = 0;
+    steps = 0;
+    lastPc = 0;
     regs->clear();
     output->clear();
     console.io().clearConsoleText();
+    setCodeView(wantCode);
     run();
     refresh();
     return true;
@@ -334,6 +376,7 @@ void ConsoleScreen::browse()
             QListWidgetItem* it = new QListWidgetItem(QIcon(SpriteCache::pixmap(SpriteId::Cartridge, 2)),
                                                       QFileInfo(file).fileName() + "\nyour file", carts);
             it->setData(Qt::UserRole, file);
+            it->setData(Qt::UserRole + 1, true);
             it->setToolTip(file);
         }
         load(file);
@@ -363,6 +406,8 @@ void ConsoleScreen::reset()
     timer.stop();
     console.reset();    // keeps the program in ROM, clears RAM, VRAM, stack and ports
     frames = 0;
+    steps = 0;
+    lastPc = 0;
     card->hide();
     output->clear();
     regs->clear();
@@ -372,25 +417,37 @@ void ConsoleScreen::reset()
 
 void ConsoleScreen::tick()
 {
-    const StepResult r = console.runFrame();
-    frames++;
-    refresh();
+    StepResult r;
+    if (codeView)
+    {
+        lastPc = console.cpu().getPC();
+        r = console.step();
+        steps++;
+    }
+    else
+    {
+        r = console.runFrame();
+        frames++;
+    }
     if (r == StepResult::Halt)
     {
         timer.stop();
         setState(State::Halted);
-        showCard("PROGRAM ENDED", Theme::green,
-                 QString("The CPU reached HLT after %1 frame%2. The registers on the right are its final values.")
-                     .arg(frames).arg(frames == 1 ? "" : "s"));
+        if (!codeView)   // CODE view says it in the caption: the card would cover the code
+            showCard("PROGRAM ENDED", Theme::green,
+                     QString("The CPU reached HLT after %1 frame%2. The registers on the right are its final values.")
+                         .arg(frames).arg(frames == 1 ? "" : "s"));
     }
     else if (r == StepResult::Fault)
     {
         timer.stop();
         setState(State::Faulted);
         const Fault& f = console.cpu().getFault();
-        showCard(QString(faultName(f.type)).toUpper(), Theme::red,
-                 QString("PC %1\n%2").arg(hex4(f.pc), QString::fromStdString(f.message)));
+        if (!codeView)
+            showCard(QString(faultName(f.type)).toUpper(), Theme::red,
+                     QString("PC %1\n%2").arg(hex4(f.pc), QString::fromStdString(f.message)));
     }
+    refresh();
 }
 
 void ConsoleScreen::runFrames(int n)
@@ -423,6 +480,9 @@ void ConsoleScreen::refresh()
         output->clear();
         outputEmpty->setVisible(true);
         trace->setLines({});
+        code->clear();
+        nowLabel->clear();
+        namesLine->hide();
         return;
     }
 
@@ -438,8 +498,62 @@ void ConsoleScreen::refresh()
     for (int i = 0; i < 8; i++) r[i] = cpu.getReg(i);
     regs->setRegisters(r, cpu.getFlags());
     cpuLine->setText(QString("PC %1  SP %2  P %3").arg(hex4(cpu.getPC()), hex4(cpu.getSP()), hex4(cpu.getP())));
-    cyclesLine->setText(QString("CYCLES  %1\nFRAMES  %2").arg(grouped(cpu.getCycles())).arg(frames));
-    frameLabel->setText(QString("FRAME %1").arg(frames, 4, 10, QChar('0')));
+    if (codeView)
+    {
+        cyclesLine->setText(QString("INSTRUCTIONS RUN  %1").arg(steps));
+        frameLabel->setText(QString("STEP %1").arg(steps, 4, 10, QChar('0')));
+    }
+    else
+    {
+        cyclesLine->setText(QString("CYCLES  %1\nFRAMES  %2").arg(grouped(cpu.getCycles())).arg(frames));
+        frameLabel->setText(QString("FRAME %1").arg(frames, 4, 10, QChar('0')));
+    }
+
+    QStringList named;   // decimal, so "R0 total = 55" reads without knowing hex
+    for (int i = 0; i < 8; i++)
+        if (!regNames[i].empty()) named << QString("R%1 %2 = %3").arg(i).arg(QString::fromStdString(regNames[i])).arg(r[i]);
+    namesLine->setText(named.join("     "));
+    namesLine->setVisible(!named.isEmpty());   // lives in the code panel, so only shows in CODE view
+
+    if (codeView)
+    {
+        const int line = currentLine();
+        QList<QTextEdit::ExtraSelection> marks;
+        if (line > 0 && line <= code->blockCount())
+        {
+            QTextEdit::ExtraSelection mark;
+            mark.format.setBackground(Theme::bgRaised);
+            mark.format.setForeground(Theme::amber);
+            mark.format.setProperty(QTextFormat::FullWidthSelection, true);
+            mark.cursor = QTextCursor(code->document()->findBlockByNumber(line - 1));
+            marks << mark;
+            code->setTextCursor(mark.cursor);
+            code->centerCursor();
+        }
+        code->setExtraSelections(marks);
+
+        const std::string src = line > 0 && line <= (int)source.size() ? source[line - 1] : "";
+        if (state == State::Halted)
+        {
+            Theme::setColour(nowLabel, Theme::green);
+            nowLabel->setText(steps > 0 ? QString("DONE:  The CPU reached HLT after %1 instruction%2.").arg(steps).arg(steps == 1 ? "" : "s")
+                                        : QString("DONE:  The CPU reached HLT."));
+        }
+        else if (state == State::Faulted)
+        {
+            const Fault& f = cpu.getFault();
+            Theme::setColour(nowLabel, Theme::red);
+            nowLabel->setText(QString("FAULT:  %1 at PC %2. %3").arg(faultName(f.type), hex4(f.pc), QString::fromStdString(f.message)));
+        }
+        else
+        {
+            QString what = QString::fromStdString(AsmNotes::comment(src));
+            if (what.isEmpty()) what = QString::fromStdString(AsmNotes::code(src));
+            if (what.isEmpty()) what = "PC " + hex4(cpu.getPC());
+            Theme::setColour(nowLabel, Theme::textHi);
+            nowLabel->setText("NOW:  " + what);
+        }
+    }
 
     const QString text = QString::fromStdString(console.io().getConsoleText());
     if (text != output->toPlainText())
@@ -460,6 +574,26 @@ void ConsoleScreen::refresh()
     trace->setLines(lines);
 }
 
+void ConsoleScreen::setCodeView(bool on)
+{
+    codeView = on;
+    screen->setVisible(!on);
+    codePage->setVisible(on);
+    if (on) card->hide();
+    timer.setInterval(on ? CODE_MS : FRAME_MS);
+    viewButton->setText(on ? "Screen" : "Code");
+    stepButton->setText(on ? "Step line" : "Step frame");
+    refresh();
+}
+
+int ConsoleScreen::currentLine()
+{
+    // after HLT or a fault the PC has moved on: show the line that just ran
+    const Word pc = state == State::Halted || state == State::Faulted ? lastPc : console.cpu().getPC();
+    const auto it = lineAt.find(pc);
+    return it == lineAt.end() ? 0 : it->second;
+}
+
 void ConsoleScreen::setState(State s)
 {
     state = s;
@@ -476,6 +610,7 @@ void ConsoleScreen::setState(State s)
     runButton->setText(running ? "Pause" : "Run");
     runButton->setGlyph(running ? SpriteId::Pause : SpriteId::Play);
     runButton->setEnabled(s != State::Empty && s != State::Error);
+    viewButton->setEnabled(s != State::Empty && s != State::Error);
     stepButton->setEnabled(s == State::Paused);
 }
 
@@ -514,6 +649,7 @@ void ConsoleScreen::keyPressEvent(QKeyEvent* e)
             state == State::Running ? pause() : run();
         return;
     case Qt::Key_F5: if (state == State::Paused) runFrames(1); return;
+    case Qt::Key_C: if (!e->isAutoRepeat() && state != State::Empty && state != State::Error) setCodeView(!codeView); return;
     case Qt::Key_O: if (e->modifiers() & Qt::ControlModifier) browse(); return;
     default: Screen::keyPressEvent(e);
     }

@@ -5,6 +5,10 @@
 #define CONSOLESCREEN_H
 
 #include <QTimer>
+#include <array>
+#include <map>
+#include <string>
+#include <vector>
 
 #include "Aashish/src/Console.h"
 #include "screens/Screen.h"
@@ -35,7 +39,8 @@ public:
     bool hasProgressToLose() const override;
 
     bool load(const QString& path);
-    void runFrames(int n);                 // for --shots: n frames without the timer
+    void runFrames(int n);                 // for --shots: n ticks without the timer (a frame, or one line in CODE view)
+    void setCodeView(bool on);             // CODE: step the .asm line by line; SCREEN: run frames and draw VRAM
 
 protected:
     void keyPressEvent(QKeyEvent* e) override;
@@ -55,12 +60,19 @@ private:
     void releaseAll();
     void showCard(const QString& title, const QColor& colour, const QString& text);
     static bool buttonFor(int key, int& button);
+    int currentLine();                     // source line about to run (or that just ran, after HLT/fault); 0 if unknown
 
     Console console;
     State state = State::Empty;
     QString name, path;
     int frames = 0;
     QTimer timer;
+    bool codeView = false;
+    int steps = 0;                         // instructions run in CODE view since load/reset
+    Word lastPc = 0;
+    std::map<Word, int> lineAt;
+    std::vector<std::string> source;
+    std::array<std::string, 8> regNames;
 
     ScreenHeader* header;
     StatusChip* chip;
@@ -68,6 +80,11 @@ private:
     QListWidget* carts;
     QStackedWidget* centre;
     VramView* screen;
+    QWidget* codePage;
+    QPlainTextEdit* code;
+    QLabel* nowLabel;
+    QLabel* namesLine;
+    PixelButton* viewButton;
     Panel* card;
     QLabel* cardTitle;
     QLabel* cardText;

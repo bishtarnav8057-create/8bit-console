@@ -304,15 +304,19 @@ void MainWindow::saveShots(const QString& dir)
     key(consoleScreen, Qt::Key_Down, false);
     key(consoleScreen, Qt::Key_Left, false);
     const QString tests = QString(PIXEL8_GUI_DIR) + "/tests/programs/";
-    consoleScreen->load(findProgram("sum.asm"));
-    consoleScreen->runFrames(5);
-    shot("04-console-sum-halted");
+    consoleScreen->load(findProgram("sum.asm"));   // opens in CODE view: one tick = one line
+    consoleScreen->runFrames(14);
+    shot("04-console-sum-code");
+    consoleScreen->runFrames(200);
+    shot("04b-console-sum-done");
     consoleScreen->load(tests + "fault.asm");
+    consoleScreen->setCodeView(false);
     consoleScreen->runFrames(1);
     shot("05-console-fault");
     consoleScreen->load(tests + "bad.asm");
     shot("06-console-errors");
     consoleScreen->load(tests + "hello.asm");
+    consoleScreen->setCodeView(false);
     consoleScreen->runFrames(1);
     shot("07-console-output");
     consoleScreen->load(findProgram("dot.asm"));
@@ -387,6 +391,13 @@ void MainWindow::saveShots(const QString& dir)
         go(id);
         if (id == ScreenId::Calculator) calculatorScreen->setSum(200, '+', 100);
         shot(QString("30-min-%1").arg((int)id));
+        if (id == ScreenId::Console)   // CODE view too: source, caption and register names must fit
+        {
+            consoleScreen->load(findProgram("sum.asm"));
+            consoleScreen->runFrames(14);
+            consoleScreen->suspend();
+            shot("30-min-3-code");
+        }
     }
     consoleScreen->suspend();
     go(ScreenId::Home);

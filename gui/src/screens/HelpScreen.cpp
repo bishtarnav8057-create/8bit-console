@@ -143,7 +143,8 @@ HelpScreen::HelpScreen(QWidget* parent) : Screen(parent)
     k->body()->addWidget(keyRow({ENTER}, "START button"));
     k->body()->addWidget(keyRow({"SHIFT"}, "SELECT button"));
     k->body()->addWidget(keyRow({"SPACE"}, "Run / pause (the screen's key, programs never see it)"));
-    k->body()->addWidget(keyRow({"F5"}, "Step one frame while paused"));
+    k->body()->addWidget(keyRow({"F5"}, "Step one frame (SCREEN) or one line (CODE) while paused"));
+    k->body()->addWidget(keyRow({"C"}, "Show the program's code / the screen"));
     k->body()->addSpacing(8);
     k->body()->addWidget(Theme::text("HOW THE KEYS REACH THE CPU", Theme::label(), Theme::textMid));
     k->body()->addWidget(para("Key held  >  IoPorts::setButton  >  port 0xF000 (one bit per button, 1 = held)"

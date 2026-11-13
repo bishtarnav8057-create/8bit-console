@@ -37,6 +37,7 @@ AsmLoad assembleProgram(const QString& path)
         for (const OperandCheckResult& e : r.errors) out.errors.append({e.lineNumber, QString::fromStdString(e.message)});
         out.ok = r.ok;
         out.bytes = r.bytes;
+        out.lineAt = r.lineAt;
         if (!r.ok && out.errors.isEmpty()) out.errors.append({0, "The program could not be assembled."});
     }
     catch (const std::exception& e)

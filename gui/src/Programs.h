@@ -4,6 +4,7 @@
 
 #include <QString>
 #include <QVector>
+#include <map>
 #include <vector>
 
 #include "Aashish/src/Bits.h"
@@ -19,6 +20,7 @@ struct AsmLoad
     bool ok = false;
     std::vector<Byte> bytes;
     QVector<AsmError> errors;
+    std::map<Word, int> lineAt;   // instruction address -> source line (1-based)
 };
 
 // CPU/programs/<name> from the build-time path, next to the exe, or up to 3 folders above it; "" if none.
