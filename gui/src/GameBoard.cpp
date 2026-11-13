@@ -1,82 +1,69 @@
 #include "GameBoard.h"
 
-#include <QColor>
-#include <QFont>
 #include <QPainter>
 #include <algorithm>
+#include <cmath>
 
-GameBoard::GameBoard(QWidget* parent)
-    : QWidget(parent), cells(Games::W * Games::H, EMPTY)
+#include "Theme.h"
+#include "art/SpriteCache.h"
+
+GameBoard::GameBoard(QWidget* parent) : QWidget(parent)
 {
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 }
 
-void GameBoard::clear()
+int GameBoard::physCell() const
 {
-    std::fill(cells.begin(), cells.end(), (int)EMPTY);
+    // the biggest cell that fits, in physical pixels and a whole multiple of 8 so the 8 x 8 tiles
+    // scale by a whole number (plan 9.3)
+    const qreal dpr = devicePixelRatioF();
+    const int frame = bezel ? Theme::BEZEL + 4 : 0;
+    const int fit = (int)std::min((width() - 2 * frame) * dpr / Games::W, (height() - 2 * frame) * dpr / Games::H);
+    return std::max(8, fit / 8 * 8);
 }
 
-void GameBoard::setCell(int x, int y, int colour)
+QRect GameBoard::screenRect() const
 {
-    if (x < 0 || x >= Games::W || y < 0 || y >= Games::H) return;
-    cells[y * Games::W + x] = colour;
+    const qreal cell = physCell() / devicePixelRatioF();
+    const int w = (int)std::ceil(cell * Games::W), h = (int)std::ceil(cell * Games::H);
+    return QRect((width() - w) / 2, (height() - h) / 2, w, h);
 }
 
-void GameBoard::setMessage(const QString& big, const QString& small)
+void GameBoard::resizeEvent(QResizeEvent*)
 {
-    bigText = big;
-    smallText = small;
+    for (QWidget* child : findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly)) child->setGeometry(screenRect());
 }
 
 void GameBoard::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
+    const qreal dpr = devicePixelRatioF();
+    const int phys = physCell();
+    const qreal cell = phys / dpr;
+    const QRect r = screenRect();
+    const bool snake = style == Style::Snake;
 
-    // the biggest square cell that lets the whole board fit
-    int cell = std::min(width() / Games::W, height() / Games::H);
-    if (cell < 1) cell = 1;
-    int boardW = cell * Games::W;
-    int boardH = cell * Games::H;
-    int left = (width() - boardW) / 2;
-    int top = (height() - boardH) / 2;
+    if (bezel) Theme::drawBezel(p, r);
+    p.fillRect(r, snake ? Theme::boardSnake : Theme::boardPong);
 
-    p.fillRect(rect(), QColor(40, 40, 40));
-    p.fillRect(left, top, boardW, boardH, QColor(15, 20, 15));
-
-    const QColor colours[6] = {
-        QColor(15, 20, 15),      // EMPTY
-        QColor(60, 190, 80),     // SNAKE_BODY
-        QColor(170, 255, 120),   // SNAKE_HEAD
-        QColor(230, 60, 60),     // FOOD
-        QColor(240, 240, 240),   // WHITE
-        QColor(70, 80, 70)       // GREY
-    };
-
+    // a dot in the middle of every cell, so the grid can be read without lines
+    const int px = phys / 8;                      // physical pixels per sprite pixel
+    const qreal dot = std::max(1, px) / dpr;
+    const QColor dotColour = snake ? Theme::dotSnake : Theme::dotPong;
     for (int y = 0; y < Games::H; y++)
-    {
         for (int x = 0; x < Games::W; x++)
-        {
-            int c = cells[y * Games::W + x];
-            if (c == EMPTY) continue;
-            p.fillRect(left + x * cell + 1, top + y * cell + 1, cell - 2, cell - 2, colours[c]);
-        }
-    }
+            p.fillRect(QRectF(r.x() + (x + 0.5) * cell - dot / 2, r.y() + (y + 0.5) * cell - dot / 2, dot, dot), dotColour);
 
-    if (!bigText.isEmpty())
+    if (!snake)   // dashed net down the middle
     {
-        p.fillRect(left, top + boardH / 3, boardW, boardH / 3, QColor(0, 0, 0, 190));
-
-        QFont big = font();
-        big.setPixelSize(std::max(14, boardH / 10));
-        big.setBold(true);
-        p.setFont(big);
-        p.setPen(Qt::white);
-        p.drawText(QRect(left, top + boardH / 3, boardW, boardH / 6), Qt::AlignCenter, bigText);
-
-        QFont small = font();
-        small.setPixelSize(std::max(10, boardH / 25));
-        p.setFont(small);
-        p.setPen(QColor(200, 200, 200));
-        p.drawText(QRect(left, top + boardH / 2, boardW, boardH / 6), Qt::AlignCenter, smallText);
+        const qreal nx = r.x() + (Games::W / 2 + 0.5) * cell - dot;
+        for (int y = 0; y < Games::H; y += 2)
+            p.fillRect(QRectF(nx, r.y() + y * cell + cell / 4, 2 * dot, cell / 2), Theme::line);
     }
+
+    for (const Tile& t : tiles)
+        SpriteCache::drawPhys(p, t.id, QPointF(r.x() + t.x * cell, r.y() + t.y * cell), px, t.rotation, t.swap);
+
+    if (Prefs::scanlines) Theme::drawScanlines(p, r);
+    if (flash) p.fillRect(r, QColor(Theme::red.red(), Theme::red.green(), Theme::red.blue(), 64));
 }

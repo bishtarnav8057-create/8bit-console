@@ -297,6 +297,17 @@ int FooterHints::paintHints(QPainter& p, int x, int y, const QVector<Hint>& hint
     return x;
 }
 
+int FooterHints::hintsWidth(const QVector<Hint>& hints)
+{
+    int x = 0;
+    for (const Hint& h : hints)
+    {
+        for (const QString& k : h.keys) x += Theme::keyCapWidth(k) + 4;
+        x += 4 + QFontMetrics(Theme::label()).horizontalAdvance(h.text) + 24;
+    }
+    return std::max(0, x - 24);
+}
+
 void FooterHints::paintEvent(QPaintEvent*)
 {
     QPainter p(this);

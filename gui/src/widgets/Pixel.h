@@ -153,6 +153,7 @@ public:
     void setHints(const QVector<Hint>& h);
     QHBoxLayout* right() { return rightBox; }
     static int paintHints(class QPainter& p, int x, int y, const QVector<Hint>& hints);   // returns end x
+    static int hintsWidth(const QVector<Hint>& hints);
 
 protected:
     void paintEvent(QPaintEvent*) override;

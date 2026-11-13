@@ -45,7 +45,8 @@ set(GUI_SOURCES
     src/main.cpp
     src/MainWindow.h   src/MainWindow.cpp
     src/CalculatorTab.h src/CalculatorTab.cpp
-    src/GameTab.h      src/GameTab.cpp
+    src/screens/GameScreen.h src/screens/GameScreen.cpp
+    src/widgets/OverlayMenu.h src/widgets/OverlayMenu.cpp
     src/GameBoard.h    src/GameBoard.cpp
     src/Games.h        src/Games.cpp
     src/Theme.h        src/Theme.cpp

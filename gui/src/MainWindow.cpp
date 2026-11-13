@@ -18,10 +18,10 @@
 #include <random>
 
 #include "CalculatorTab.h"
-#include "GameTab.h"
 #include "Theme.h"
 #include "Programs.h"
 #include "screens/ConsoleScreen.h"
+#include "screens/GameScreen.h"
 #include "screens/HelpScreen.h"
 #include "screens/HomeScreen.h"
 #include "widgets/PixelDialog.h"
@@ -122,10 +122,9 @@ MainWindow::MainWindow()
     add(ScreenId::Calculator, new TabScreen("CALCULATOR", new CalculatorTab(), stack));
     consoleScreen = new ConsoleScreen(stack);
     add(ScreenId::Console, consoleScreen);
-    GameTab* games = new GameTab();
-    TabScreen* arcade = new TabScreen("ARCADE", games, stack);
-    add(ScreenId::Snake, arcade);
-    add(ScreenId::Pong, arcade);
+    gameScreen = new GameScreen(stack);
+    add(ScreenId::Snake, gameScreen);
+    add(ScreenId::Pong, gameScreen);
     help = new HelpScreen(stack);
     add(ScreenId::Help, help);
 
@@ -173,8 +172,8 @@ void MainWindow::go(ScreenId id)
     if (next == current() && id == currentId) { next->enter(); return; }
 
     if (id == ScreenId::Help) { beforeHelp = currentId; help->showFor(currentId); }
-    if ((id == ScreenId::Snake || id == ScreenId::Pong) && currentId != ScreenId::Help)   // start the chosen game
-        QMetaObject::invokeMethod(next->findChild<GameTab*>(), id == ScreenId::Snake ? "startSnake" : "startPong");
+    if ((id == ScreenId::Snake || id == ScreenId::Pong) && currentId != ScreenId::Help)   // a fresh game in READY
+        gameScreen->setMode(id == ScreenId::Snake ? GameScreen::SNAKE : GameScreen::PONG);
 
     if (current()) current()->leave();
     if (Prefs::animations && isVisible()) wipe->play(stack->grab());
@@ -313,6 +312,28 @@ void MainWindow::saveShots(const QString& dir)
     shot("07-console-output");
     consoleScreen->load(findProgram("dot.asm"));
     consoleScreen->suspend();
+
+    go(ScreenId::Snake);
+    shot("10-snake-ready");
+    gameScreen->playTicks(6);
+    key(gameScreen, Qt::Key_Down, true);
+    gameScreen->playTicks(4);
+    key(gameScreen, Qt::Key_Left, true);
+    gameScreen->playTicks(3);
+    shot("11-snake-playing");
+    gameScreen->pauseForShots();
+    shot("12-snake-paused");
+    key(gameScreen, Qt::Key_Escape, true);     // resume
+    gameScreen->playTicks(40);                 // into the wall
+    QApplication::processEvents();
+    shot("13-snake-over");
+
+    go(ScreenId::Home);
+    go(ScreenId::Pong);
+    gameScreen->playTicks(25);
+    shot("14-pong");
+    gameScreen->pauseForShots();
+    go(ScreenId::Home);
 
     go(ScreenId::Help);
     shot("20-help");

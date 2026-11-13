@@ -10,6 +10,7 @@
 
 class QStackedWidget;
 class ConsoleScreen;
+class GameScreen;
 class HelpScreen;
 class PixelWipe;
 
@@ -39,6 +40,7 @@ private:
     ScreenId beforeHelp = ScreenId::Home;
     HelpScreen* help;
     ConsoleScreen* consoleScreen;
+    GameScreen* gameScreen;
     PixelWipe* wipe;
 };
 
