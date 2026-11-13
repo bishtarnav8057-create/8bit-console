@@ -119,7 +119,7 @@ CalculatorScreen::CalculatorScreen(QWidget* parent) : Screen(parent)
     // ---- left: the calculator
     Panel* left = new Panel("CALCULATOR", work);
     QVBoxLayout* l = left->body();
-    l->setSpacing(14);
+    l->setSpacing(10);
 
     Panel* display = new Panel(QString(), left);
     display->setColours(Theme::screenOff, Theme::greenDeep);
@@ -185,7 +185,6 @@ CalculatorScreen::CalculatorScreen(QWidget* parent) : Screen(parent)
     byteRow("B", inputB, bitsB, hexB);
 
     runButton = new PixelButton("Run on CPU", PixelButton::Primary, left);
-    runButton->setHeightKind(PixelButton::Hero);
     runButton->setTrailingGlyph(SpriteId::Enter);
     runButton->setFocusPolicy(Qt::NoFocus);
     runButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -194,7 +193,7 @@ CalculatorScreen::CalculatorScreen(QWidget* parent) : Screen(parent)
 
     why = new Panel("WHY?", left);
     why->setTitleAccent(Theme::red);
-    whyText = Theme::text("", Theme::mono(13), Theme::textHi, why);
+    whyText = Theme::text("", Theme::mono(12), Theme::textHi, why);
     whyText->setWordWrap(true);
     QHBoxLayout* whyRow = new QHBoxLayout();
     whyBits = new BitRow(why);
@@ -219,8 +218,8 @@ CalculatorScreen::CalculatorScreen(QWidget* parent) : Screen(parent)
     r->addWidget(info);
     r->addSpacing(4);
     r->addWidget(Theme::text("TRACE", Theme::label(), Theme::textMid, right));
-    QLabel* caption = Theme::text("Lines of calc.asm that ran, in source order. Values are after each line's last "
-                                  "run. Click a row to see the registers at that point.",
+    QLabel* caption = Theme::text("Lines of calc.asm that ran, in source order, with values after each line's "
+                                  "last run. Click a row for its registers.",
                                   Theme::mono(12), Theme::textDim, right);
     caption->setWordWrap(true);
     r->addWidget(caption);
@@ -235,11 +234,13 @@ CalculatorScreen::CalculatorScreen(QWidget* parent) : Screen(parent)
     trace->setFocusPolicy(Qt::NoFocus);
     trace->setAlternatingRowColors(true);
     trace->setShowGrid(false);
+    trace->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    trace->setTextElideMode(Qt::ElideRight);
     trace->verticalHeader()->hide();
     trace->verticalHeader()->setDefaultSectionSize(28);
     trace->horizontalHeader()->setStretchLastSection(true);
     trace->setColumnWidth(0, 56);
-    trace->setColumnWidth(1, 170);
+    trace->setColumnWidth(1, 160);
     trace->setColumnWidth(2, 56);
     trace->setColumnWidth(3, 92);
     connect(trace, &QTableWidget::currentCellChanged, this, [this](int row) { showRow(row); });
@@ -435,8 +436,8 @@ void CalculatorScreen::showResult(char op, int a, int b, const CalcResult& r)
             whyBits->setValue(a + b);
             whyBits->show();
             whyBitsNote->show();
-            whyText->setText(QString("%1 + %2 = %3, which needs 9 bits. A byte has 8, so the 9th bit (256) is "
-                                     "dropped: %3 - 256 = %4. The CPU sets the C (carry) flag to say so.")
+            whyText->setText(QString("%1 + %2 = %3 needs 9 bits and a byte has 8: the 9th bit (256) is dropped, "
+                                     "%3 - 256 = %4. The C flag records the carry.")
                                  .arg(a).arg(b).arg(a + b).arg(answer));
             why->show();
         }
@@ -444,8 +445,8 @@ void CalculatorScreen::showResult(char op, int a, int b, const CalcResult& r)
         {
             statusChip->setChip("BORROW", Theme::amber, Theme::amberInk);
             why->setTitle(QString("WHY %1?").arg(answer));
-            whyText->setText(QString("%1 - %2 = %3, which is below 0. A byte cannot be negative, so it wraps "
-                                     "around: %3 + 256 = %4. The C flag means a borrow was needed.")
+            whyText->setText(QString("%1 - %2 = %3 is below 0 and a byte cannot be negative, so it wraps "
+                                     "around: %3 + 256 = %4. The C flag records the borrow.")
                                  .arg(a).arg(b).arg(a - b).arg(answer));
             why->show();
         }

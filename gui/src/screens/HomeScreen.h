@@ -19,6 +19,7 @@ public:
     void enter() override;
     void leave() override;
     void suspend() override;
+    void runPreview(int card, int steps);    // for --shots
 
 signals:
     void helpRequested();

@@ -9,7 +9,9 @@
 #include "screens/Screen.h"
 
 class QStackedWidget;
+class BootScreen;
 class CalculatorScreen;
+class HomeScreen;
 class ConsoleScreen;
 class GameScreen;
 class HelpScreen;
@@ -40,6 +42,8 @@ private:
     ScreenId currentId = ScreenId::Home;
     ScreenId beforeHelp = ScreenId::Home;
     HelpScreen* help;
+    BootScreen* boot;
+    HomeScreen* homeScreen;
     CalculatorScreen* calculatorScreen;
     ConsoleScreen* consoleScreen;
     GameScreen* gameScreen;

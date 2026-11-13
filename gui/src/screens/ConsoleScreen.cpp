@@ -132,7 +132,7 @@ ConsoleScreen::ConsoleScreen(QWidget* parent) : Screen(parent)
     QGridLayout* grid = new QGridLayout();
     grid->setContentsMargins(24, 16, 24, 16);
     grid->setHorizontalSpacing(16);
-    grid->setVerticalSpacing(16);
+    grid->setVerticalSpacing(12);
     page->addLayout(grid, 1);
 
     // ---- cartridges
@@ -208,8 +208,6 @@ ConsoleScreen::ConsoleScreen(QWidget* parent) : Screen(parent)
     connect(stepButton, &QPushButton::clicked, this, [this] { if (state == State::Paused) runFrames(1); });
     connect(resetButton, &QPushButton::clicked, this, [this] { const bool was = state == State::Running; reset(); if (was) run(); });
     controls->addStretch(1);
-    pad = new PadView(screenPage);
-    controls->addWidget(pad);
     sp->addLayout(controls);
     centre->addWidget(screenPage);
 
@@ -237,19 +235,22 @@ ConsoleScreen::ConsoleScreen(QWidget* parent) : Screen(parent)
 
     // ---- CPU panel
     Panel* cpuPanel = new Panel("CPU", this);
-    cpuPanel->setFixedWidth(260);
+    cpuPanel->setFixedWidth(290);
     cpuLine = Theme::text("", Theme::mono(13), Theme::cyan, cpuPanel);
-    regs = new RegisterView(2, cpuPanel);
+    regs = new RegisterView(4, cpuPanel, 56);
     cyclesLine = Theme::text("", Theme::mono(13), Theme::textMid, cpuPanel);
     cpuPanel->body()->addWidget(cpuLine);
     cpuPanel->body()->addWidget(regs, 0, Qt::AlignLeft);
     cpuPanel->body()->addWidget(cyclesLine);
     cpuPanel->body()->addStretch(1);
+    cpuPanel->body()->addWidget(Theme::text("BUTTONS HELD", Theme::label(), Theme::textMid, cpuPanel));
+    pad = new PadView(cpuPanel);   // lights while a key is held: the key bridge, visible
+    cpuPanel->body()->addWidget(pad);
     grid->addWidget(cpuPanel, 0, 2);
 
     // ---- bottom row: output and the last instructions
     Panel* outPanel = new Panel("OUTPUT", this);
-    outPanel->setFixedHeight(180);
+    outPanel->setFixedHeight(160);
     QGridLayout* outStage = new QGridLayout();
     output = new QPlainTextEdit(outPanel);
     output->setReadOnly(true);
@@ -263,7 +264,7 @@ ConsoleScreen::ConsoleScreen(QWidget* parent) : Screen(parent)
     grid->addWidget(outPanel, 1, 0, 1, 2);
 
     Panel* tracePanel = new Panel("LAST 16 INSTRUCTIONS", this);
-    tracePanel->setFixedHeight(180);
+    tracePanel->setFixedHeight(160);
     trace = new TraceView(tracePanel);
     tracePanel->body()->addWidget(trace);
     grid->addWidget(tracePanel, 1, 2);
@@ -416,7 +417,7 @@ void ConsoleScreen::refresh()
         screen->setFrame({});
         screen->setPower(false);
         regs->clear();
-        cpuLine->setText("PC ------   SP ------\nP  ------");
+        cpuLine->setText("PC ------  SP ------  P ------");
         cyclesLine->setText("CYCLES  -\nFRAMES  -");
         frameLabel->setText("");
         output->clear();
@@ -436,7 +437,7 @@ void ConsoleScreen::refresh()
     std::array<Byte, 8> r{};
     for (int i = 0; i < 8; i++) r[i] = cpu.getReg(i);
     regs->setRegisters(r, cpu.getFlags());
-    cpuLine->setText(QString("PC %1   SP %2\nP  %3").arg(hex4(cpu.getPC()), hex4(cpu.getSP()), hex4(cpu.getP())));
+    cpuLine->setText(QString("PC %1  SP %2  P %3").arg(hex4(cpu.getPC()), hex4(cpu.getSP()), hex4(cpu.getP())));
     cyclesLine->setText(QString("CYCLES  %1\nFRAMES  %2").arg(grouped(cpu.getCycles())).arg(frames));
     frameLabel->setText(QString("FRAME %1").arg(frames, 4, 10, QChar('0')));
 

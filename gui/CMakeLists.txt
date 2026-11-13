@@ -57,6 +57,7 @@ set(GUI_SOURCES
     src/widgets/PixelDialog.h src/widgets/PixelDialog.cpp
     src/screens/Screen.h
     src/screens/HomeScreen.h src/screens/HomeScreen.cpp
+    src/screens/BootScreen.h src/screens/BootScreen.cpp
     src/screens/HelpScreen.h src/screens/HelpScreen.cpp
     src/screens/ConsoleScreen.h src/screens/ConsoleScreen.cpp
     src/widgets/CpuViews.h src/widgets/CpuViews.cpp
@@ -64,6 +65,9 @@ set(GUI_SOURCES
 )
 
 add_executable(pixel8_gui WIN32 ${GUI_SOURCES} ${CPU_SOURCES} resources.qrc)
+if(WIN32)
+    target_sources(pixel8_gui PRIVATE assets/icon/app.rc)   # the exe icon in Explorer and the taskbar
+endif()
 target_include_directories(pixel8_gui PRIVATE ${CPU_DIR} src)
 target_compile_definitions(pixel8_gui PRIVATE PIXEL8_CPU_DIR="${CPU_DIR}" APP_VERSION="${PROJECT_VERSION}" PIXEL8_GUI_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(pixel8_gui PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)

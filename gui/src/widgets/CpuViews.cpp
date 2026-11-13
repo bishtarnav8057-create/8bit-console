@@ -94,9 +94,9 @@ bool BitRow::event(QEvent* e)
 
 // ---------------------------------------------------------------- RegisterView
 
-namespace { const int RW = 72, RH = 52, RG = 8; }
+namespace { const int RH = 52, RG = 8; }
 
-RegisterView::RegisterView(int cols, QWidget* parent) : QWidget(parent), columns(cols)
+RegisterView::RegisterView(int cols, QWidget* parent, int cellWidth) : QWidget(parent), columns(cols), cellW(cellWidth)
 {
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     clock.start();
@@ -108,7 +108,7 @@ RegisterView::RegisterView(int cols, QWidget* parent) : QWidget(parent), columns
 QSize RegisterView::sizeHint() const
 {
     const int rows = 8 / columns;
-    return QSize(std::max(columns * RW + (columns - 1) * RG, 204), rows * (RH + RG) + 26);
+    return QSize(std::max(columns * cellW + (columns - 1) * RG, 204), rows * (RH + RG) + 26);
 }
 
 void RegisterView::clear()
@@ -143,7 +143,7 @@ void RegisterView::paintEvent(QPaintEvent*)
     const qint64 now = clock.elapsed();
     for (int i = 0; i < 8; i++)
     {
-        const QRect r((i % columns) * (RW + RG), (i / columns) * (RH + RG), RW, RH);
+        const QRect r((i % columns) * (cellW + RG), (i / columns) * (RH + RG), cellW, RH);
         const bool glow = now - changedAt[i] < 600;
         Theme::drawBox(p, r, Theme::bgRaised, glow ? Theme::amber : Theme::line);
         p.setFont(Theme::label());
@@ -154,6 +154,7 @@ void RegisterView::paintEvent(QPaintEvent*)
         p.setPen(glow ? Theme::amber : Theme::textHi);
         p.drawText(r.adjusted(8, 18, 0, 0), Qt::AlignLeft | Qt::AlignTop,
                    QString("%1").arg(regs[i], 2, 16, QChar('0')).toUpper());
+        if (cellW < 72) continue;   // narrow cells: hex only
         p.setFont(Theme::mono(12));
         p.setPen(Theme::textDim);
         p.drawText(r.adjusted(0, 18, -8, 0), Qt::AlignRight | Qt::AlignTop, QString::number(regs[i]));

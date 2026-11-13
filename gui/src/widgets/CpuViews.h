@@ -43,7 +43,7 @@ private:
 class RegisterView : public QWidget
 {
 public:
-    explicit RegisterView(int columns = 4, QWidget* parent = nullptr);
+    explicit RegisterView(int columns = 4, QWidget* parent = nullptr, int cellWidth = 72);
     void setRegisters(const std::array<Byte, 8>& regs, Byte flags);
     // compare against `before` instead of the values shown now
     void setRegisters(const std::array<Byte, 8>& regs, Byte flags, const std::array<Byte, 8>& before);
@@ -60,7 +60,7 @@ private:
     std::array<qint64, 8> changedAt{};
     QElapsedTimer clock;
     QTimer fade;
-    int columns;
+    int columns, cellW;
 };
 
 // The PIXEL-8 screen: 32 x 16 VRAM bytes in a bezel, whole-number scale, palette of plan 5.3.

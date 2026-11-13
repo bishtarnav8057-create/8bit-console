@@ -19,6 +19,7 @@
 
 #include "Theme.h"
 #include "Programs.h"
+#include "screens/BootScreen.h"
 #include "screens/CalculatorScreen.h"
 #include "screens/ConsoleScreen.h"
 #include "screens/GameScreen.h"
@@ -90,7 +91,11 @@ MainWindow::MainWindow()
     stack = new QStackedWidget(this);
     setCentralWidget(stack);
 
+    boot = new BootScreen(stack);
+    add(ScreenId::Boot, boot);
+    connect(boot, &BootScreen::finished, this, [this] { go(ScreenId::Home); });
     HomeScreen* home = new HomeScreen(stack);
+    homeScreen = home;
     add(ScreenId::Home, home);
     calculatorScreen = new CalculatorScreen(stack);
     add(ScreenId::Calculator, calculatorScreen);
@@ -119,9 +124,10 @@ MainWindow::MainWindow()
     resize(1280, 800);
     restoreGeometry(QSettings().value("geometry").toByteArray());
 
-    stack->setCurrentWidget(home);
-    currentId = ScreenId::Home;
-    QTimer::singleShot(0, home, &Screen::enter);
+    Screen* first = Prefs::bootScreen ? static_cast<Screen*>(boot) : home;
+    stack->setCurrentWidget(first);
+    currentId = Prefs::bootScreen ? ScreenId::Boot : ScreenId::Home;
+    QTimer::singleShot(0, first, &Screen::enter);
 }
 
 void MainWindow::add(ScreenId id, Screen* s)
@@ -158,7 +164,7 @@ void MainWindow::go(ScreenId id)
 
 void MainWindow::showHelp()
 {
-    if (currentId != ScreenId::Help) go(ScreenId::Help);
+    if (currentId != ScreenId::Help && currentId != ScreenId::Boot) go(ScreenId::Help);
 }
 
 void MainWindow::toggleFullScreen()
@@ -257,8 +263,17 @@ void MainWindow::saveShots(const QString& dir)
         QApplication::sendEvent(to, &e);
     };
 
+    go(ScreenId::Boot);
+    shot("00-boot");
     go(ScreenId::Home);
     shot("01-home");
+    homeScreen->runPreview(1, 30);
+    shot("01-home-console-preview");
+    homeScreen->runPreview(2, 60);
+    shot("01-home-snake-preview");
+    homeScreen->runPreview(3, 40);
+    shot("01-home-pong-preview");
+    homeScreen->runPreview(0, 0);
 
     go(ScreenId::Calculator);
     shot("02-calculator-ready");
@@ -325,5 +340,35 @@ void MainWindow::saveShots(const QString& dir)
     go(ScreenId::Help);
     shot("20-help");
     go(ScreenId::Home);
+
+    // dialogs: take the picture from inside their event loop, then close them with Esc
+    auto dialogShot = [&](const QString& name) {
+        QTimer::singleShot(150, this, [this, dir, name] {
+            grab().save(QDir(dir).filePath(name + ".png"));
+            if (QWidget* d = findChild<PixelDialog*>())
+            {
+                QKeyEvent esc(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+                QApplication::sendEvent(d, &esc);
+            }
+        });
+    };
+    dialogShot("21-exit-dialog");
+    PixelDialog::confirmQuit(this, false);
+    dialogShot("22-about");
+    showAbout();
+    dialogShot("23-settings");
+    showSettings();
+
+    // the smallest window size: nothing may be cut off
+    resize(minimumSize());
+    for (ScreenId id : {ScreenId::Home, ScreenId::Calculator, ScreenId::Console, ScreenId::Snake, ScreenId::Help})
+    {
+        go(id);
+        if (id == ScreenId::Calculator) calculatorScreen->setSum(200, '+', 100);
+        shot(QString("30-min-%1").arg((int)id));
+    }
+    consoleScreen->suspend();
+    go(ScreenId::Home);
+    resize(1280, 800);
     Prefs::animations = anim;
 }

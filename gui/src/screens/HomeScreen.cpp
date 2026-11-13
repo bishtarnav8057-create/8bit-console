@@ -11,8 +11,14 @@
 #include <QVBoxLayout>
 #include <functional>
 
+#include "Aashish/src/Console.h"
+#include "Aashish/src/MemoryMap.h"
+#include "GameBoard.h"
+#include "Programs.h"
 #include "Theme.h"
 #include "art/SpriteCache.h"
+#include "screens/GameScreen.h"
+#include "widgets/CpuViews.h"
 #include "widgets/Pixel.h"
 
 namespace
@@ -216,6 +222,8 @@ private:
 
 // ---------------------------------------------------------------- PreviewPane
 
+// Live previews (plan 7.2): dot.asm really running on a Console, and Snake / Pong played by tiny bots.
+// They start 400 ms after a card gets focus and stop when it loses it, so an idle Home costs almost nothing.
 class PreviewPane : public Panel
 {
 public:
@@ -226,8 +234,22 @@ public:
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         title = Theme::text("", Theme::pixel(16), Theme::textHi, this);
         stage = new QStackedWidget(this);
-        stage->setMinimumHeight(180);
-        for (const ProgramEntry& e : programs()) stage->addWidget(new SpriteView(e.icon, 8, stage));
+        stage->setMinimumHeight(200);
+        for (const ProgramEntry& e : programs())
+        {
+            switch (e.target)
+            {
+            case ScreenId::Calculator: stage->addWidget(calcPreview()); break;
+            case ScreenId::Console: vram = new VramView(stage); stage->addWidget(vram); break;
+            case ScreenId::Snake: snakeBoard = new GameBoard(stage); stage->addWidget(snakeBoard); break;
+            case ScreenId::Pong:
+                pongBoard = new GameBoard(stage);
+                pongBoard->setStyle(GameBoard::Style::Pong);
+                stage->addWidget(pongBoard);
+                break;
+            default: stage->addWidget(new SpriteView(e.icon, 8, stage));
+            }
+        }
         about = Theme::text("", Theme::mono(13), Theme::textMid, this);
         about->setWordWrap(true);
         hints = new HintsView(this);
@@ -243,6 +265,13 @@ public:
         body()->addWidget(hints);
         body()->addStretch(0);
         body()->addWidget(launch);
+
+        delay.setSingleShot(true);
+        delay.setInterval(400);
+        QObject::connect(&delay, &QTimer::timeout, this, [this] { begin(); });
+        QObject::connect(&ticker, &QTimer::timeout, this, [this] { step(); });
+        snakeBoard->setTiles(GameScreen::snakeTiles(snake, false, true));
+        pongBoard->setTiles(GameScreen::pongTiles(pong));
     }
 
     void show(int i)
@@ -252,15 +281,136 @@ public:
         about->setText(e.about);
         hints->setHints(e.keys);
         stage->setCurrentIndex(i);
+        stop();
+        target = e.target;
+        delay.start();
+    }
+
+    void stop()
+    {
+        delay.stop();
+        ticker.stop();
+    }
+
+    // for --shots: run the preview for n steps right away
+    void run(int n)
+    {
+        delay.stop();
+        begin();
+        ticker.stop();
+        for (int i = 0; i < n; i++) step();
     }
 
     PixelButton* launch;
 
 private:
+    QWidget* calcPreview()
+    {
+        Panel* d = new Panel(QString(), stage);
+        d->setColours(Theme::screenOff, Theme::greenDeep);
+        d->body()->addStretch(1);
+        d->body()->addWidget(Theme::text("200 + 100 = 44", Theme::pixel(16), Theme::green, d));
+        QHBoxLayout* row = new QHBoxLayout();
+        BitRow* bits = new BitRow(d);
+        bits->setNinth(true);
+        bits->setValue(300);
+        row->addWidget(bits);
+        row->addSpacing(8);
+        row->addWidget(Theme::text("CARRY", Theme::pixel(8), Theme::amber, d));
+        row->addStretch(1);
+        d->body()->addLayout(row);
+        d->body()->addWidget(Theme::text("The 9th bit doesn't fit in a byte.", Theme::mono(12), Theme::textMid, d));
+        d->body()->addStretch(1);
+        return d;
+    }
+
+    void begin()
+    {
+        if (target == ScreenId::Console)
+        {
+            if (!machineReady)
+            {
+                const AsmLoad a = assembleProgram(findProgram("dot.asm"));
+                machineReady = a.ok && machine.loadProgram(a.bytes);
+            }
+            if (machineReady) ticker.start(50);
+        }
+        else if (target == ScreenId::Snake) ticker.start(130);
+        else if (target == ScreenId::Pong) ticker.start(70);
+    }
+
+    void step()
+    {
+        frame++;
+        if (target == ScreenId::Console)
+        {
+            // the bot holds right, down, left, up for 12 frames each: the dot walks a square
+            static const int walk[4] = {IoPorts::BTN_RIGHT, IoPorts::BTN_DOWN, IoPorts::BTN_LEFT, IoPorts::BTN_UP};
+            machine.io().setInput((Byte)(1 << walk[(frame / 12) % 4]));
+            machine.runFrame();
+            std::array<Byte, 512> px{};
+            for (int y = 0; y < MemoryMap::SCREEN_HEIGHT; y++)
+                for (int x = 0; x < MemoryMap::SCREEN_WIDTH; x++)
+                    px[y * MemoryMap::SCREEN_WIDTH + x] = machine.pixel(x, y);
+            vram->setFrame(px);
+        }
+        else if (target == ScreenId::Snake)
+        {
+            snakeBot();
+            snake.step();
+            if (snake.dead()) snake.reset();
+            snakeBoard->setTiles(GameScreen::snakeTiles(snake, false, frame / 3 % 2 == 0));
+        }
+        else if (target == ScreenId::Pong)
+        {
+            const int centre = pong.playerY() + Games::Pong::PADDLE / 2;   // the bot follows the ball
+            if (pong.ballY() < centre) pong.movePlayer(-1);
+            else if (pong.ballY() > centre) pong.movePlayer(1);
+            pong.cpuMove(frame);
+            pong.step();
+            if (pong.over()) pong.reset();
+            pongBoard->setTiles(GameScreen::pongTiles(pong));
+        }
+    }
+
+    // turn towards the food, but never back on itself, into a wall or into the body
+    void snakeBot()
+    {
+        static const int DX[4] = {0, 1, 0, -1}, DY[4] = {-1, 0, 1, 0};   // UP RIGHT DOWN LEFT
+        const std::vector<Games::Point>& body = snake.body();
+        const Games::Point head = body[0], food = snake.food();
+        auto safe = [&](int d) {
+            const int x = head.x + DX[d], y = head.y + DY[d];
+            if (x < 0 || y < 0 || x >= Games::W || y >= Games::H) return false;
+            for (size_t i = 0; i + 1 < body.size(); i++)
+                if (body[i].x == x && body[i].y == y) return false;
+            return true;
+        };
+        int order[4] = {food.x > head.x ? Games::RIGHT : Games::LEFT, food.y > head.y ? Games::DOWN : Games::UP,
+                        food.y > head.y ? Games::UP : Games::DOWN, food.x > head.x ? Games::LEFT : Games::RIGHT};
+        if (food.x == head.x) std::swap(order[0], order[1]);
+        for (int d : order)
+        {
+            const Games::Point second = body.size() > 1 ? body[1] : head;
+            const bool reverse = head.x + DX[d] == second.x && head.y + DY[d] == second.y;
+            if (!reverse && safe(d)) { snake.turn(d); return; }
+        }
+    }
+
     QLabel* title;
     QLabel* about;
     HintsView* hints;
     QStackedWidget* stage;
+    VramView* vram = nullptr;
+    GameBoard* snakeBoard = nullptr;
+    GameBoard* pongBoard = nullptr;
+    Console machine;
+    bool machineReady = false;
+    Games::Snake snake;
+    Games::Pong pong;
+    ScreenId target = ScreenId::Calculator;
+    int frame = 0;
+    QTimer delay, ticker;
 };
 
 // ---------------------------------------------------------------- HomeScreen
@@ -335,8 +485,18 @@ void HomeScreen::enter()
     focusCard(focused);
 }
 
-void HomeScreen::leave() {}
+void HomeScreen::leave()
+{
+    preview->stop();
+}
+
 void HomeScreen::suspend() {}
+
+void HomeScreen::runPreview(int card, int steps)
+{
+    focusCard(card);
+    preview->run(steps);
+}
 
 void HomeScreen::focusCard(int i)
 {
