@@ -15,7 +15,7 @@ if %errorlevel%==0 windeployqt --release --no-translations build\pixel8_gui.exe
 
 echo.
 echo Build OK: gui\build\pixel8_gui.exe
-echo Tests OK: test_games, test_sprites, test_snake_segments
+echo Tests OK: test_games, test_sprites, test_snake_segments, test_asm_notes
 exit /b 0
 
 :FAIL

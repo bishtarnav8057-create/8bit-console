@@ -53,6 +53,7 @@ set(GUI_SOURCES
     src/art/Sprites.h  src/art/Sprites.cpp
     src/art/SpriteCache.h src/art/SpriteCache.cpp
     src/model/SnakeSegments.h src/model/SnakeSegments.cpp
+    src/model/AsmNotes.h src/model/AsmNotes.cpp
     src/widgets/Pixel.h src/widgets/Pixel.cpp
     src/widgets/PixelDialog.h src/widgets/PixelDialog.cpp
     src/screens/Screen.h
@@ -78,7 +79,10 @@ add_executable(test_sprites tests/test_sprites.cpp src/art/Sprites.cpp)
 add_executable(test_snake_segments tests/test_snake_segments.cpp src/model/SnakeSegments.cpp src/Games.cpp)
 target_include_directories(test_sprites PRIVATE src)
 target_include_directories(test_snake_segments PRIVATE src)
+add_executable(test_asm_notes tests/test_asm_notes.cpp src/model/AsmNotes.cpp)
+target_include_directories(test_asm_notes PRIVATE src)
 enable_testing()
 add_test(NAME games COMMAND test_games)
 add_test(NAME sprites COMMAND test_sprites)
 add_test(NAME snake_segments COMMAND test_snake_segments)
+add_test(NAME asm_notes COMMAND test_asm_notes)
