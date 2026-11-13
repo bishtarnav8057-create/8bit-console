@@ -263,7 +263,8 @@ ConsoleScreen::ConsoleScreen(QWidget* parent) : Screen(parent)
     Panel* cpuPanel = new Panel("CPU", this);
     cpuPanel->setFixedWidth(290);
     cpuLine = Theme::text("", Theme::mono(13), Theme::cyan, cpuPanel);
-    regs = new RegisterView(4, cpuPanel, 56);    cyclesLine = Theme::text("", Theme::mono(13), Theme::textMid, cpuPanel);
+    regs = new RegisterView(4, cpuPanel, 56);
+    cyclesLine = Theme::text("", Theme::mono(13), Theme::textMid, cpuPanel);
     cpuPanel->body()->addWidget(cpuLine);
     cpuPanel->body()->addWidget(regs, 0, Qt::AlignLeft);
     cpuPanel->body()->addWidget(cyclesLine);
@@ -352,13 +353,11 @@ bool ConsoleScreen::load(const QString& file)
     code->setPlainText(numbered.join('\n'));
     frames = 0;
     steps = 0;
-    lastPc = 0;
     regs->clear();
     output->clear();
     console.io().clearConsoleText();
-    setCodeView(wantCode);
-    run();
-    refresh();
+    run();                    // leave Empty/Error first: refresh() clears the code listing in those states
+    setCodeView(wantCode);    // sets the timer interval and refreshes
     return true;
 }
 
@@ -407,7 +406,6 @@ void ConsoleScreen::reset()
     console.reset();    // keeps the program in ROM, clears RAM, VRAM, stack and ports
     frames = 0;
     steps = 0;
-    lastPc = 0;
     card->hide();
     output->clear();
     regs->clear();
@@ -420,7 +418,6 @@ void ConsoleScreen::tick()
     StepResult r;
     if (codeView)
     {
-        lastPc = console.cpu().getPC();
         r = console.step();
         steps++;
     }
@@ -500,7 +497,9 @@ void ConsoleScreen::refresh()
     cpuLine->setText(QString("PC %1  SP %2  P %3").arg(hex4(cpu.getPC()), hex4(cpu.getSP()), hex4(cpu.getP())));
     if (codeView)
     {
-        cyclesLine->setText(QString("INSTRUCTIONS RUN  %1").arg(steps));
+        // steps only counts CODE-view lines; once frames have run, it is not the whole program
+        cyclesLine->setText(frames == 0 ? QString("INSTRUCTIONS RUN  %1").arg(steps)
+                                        : QString("LINES STEPPED  %1\nFRAMES  %2").arg(steps).arg(frames));
         frameLabel->setText(QString("STEP %1").arg(steps, 4, 10, QChar('0')));
     }
     else
@@ -536,7 +535,7 @@ void ConsoleScreen::refresh()
         if (state == State::Halted)
         {
             Theme::setColour(nowLabel, Theme::green);
-            nowLabel->setText(steps > 0 ? QString("DONE:  The CPU reached HLT after %1 instruction%2.").arg(steps).arg(steps == 1 ? "" : "s")
+            nowLabel->setText(steps > 0 && frames == 0 ? QString("DONE:  The CPU reached HLT after %1 instruction%2.").arg(steps).arg(steps == 1 ? "" : "s")
                                         : QString("DONE:  The CPU reached HLT."));
         }
         else if (state == State::Faulted)
@@ -588,8 +587,9 @@ void ConsoleScreen::setCodeView(bool on)
 
 int ConsoleScreen::currentLine()
 {
-    // after HLT or a fault the PC has moved on: show the line that just ran
-    const Word pc = state == State::Halted || state == State::Faulted ? lastPc : console.cpu().getPC();
+    // after HLT the PC has moved on: the newest trace entry is the HLT. A fault already rewinds the PC.
+    const InstructionTrace& t = console.cpu().getTrace();
+    const Word pc = state == State::Halted && t.size() > 0 ? t.at(t.size() - 1).pc : console.cpu().getPC();
     const auto it = lineAt.find(pc);
     return it == lineAt.end() ? 0 : it->second;
 }

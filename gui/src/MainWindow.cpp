@@ -309,12 +309,20 @@ void MainWindow::saveShots(const QString& dir)
     shot("04-console-sum-code");
     consoleScreen->runFrames(200);
     shot("04b-console-sum-done");
+    consoleScreen->load(findProgram("sum.asm"));   // halts inside one SCREEN frame, then CODE view must still point at HLT
+    consoleScreen->setCodeView(false);
+    consoleScreen->runFrames(1);
+    consoleScreen->setCodeView(true);
+    shot("04c-console-sum-halt-in-screen");
     consoleScreen->load(tests + "fault.asm");
     consoleScreen->setCodeView(false);
     consoleScreen->runFrames(1);
     shot("05-console-fault");
     consoleScreen->load(tests + "bad.asm");
     shot("06-console-errors");
+    consoleScreen->load(findProgram("sum.asm"));   // from the Error state: the code listing must not come up blank
+    consoleScreen->runFrames(3);
+    shot("06b-console-code-after-error");
     consoleScreen->load(tests + "hello.asm");
     consoleScreen->setCodeView(false);
     consoleScreen->runFrames(1);

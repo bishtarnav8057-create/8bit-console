@@ -69,7 +69,6 @@ private:
     QTimer timer;
     bool codeView = false;
     int steps = 0;                         // instructions run in CODE view since load/reset
-    Word lastPc = 0;
     std::map<Word, int> lineAt;
     std::vector<std::string> source;
     std::array<std::string, 8> regNames;
