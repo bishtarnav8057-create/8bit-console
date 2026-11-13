@@ -8,21 +8,13 @@ QToolTip {
     background: #1A1D2E; color: #ECE8D8; border: 2px solid #454C73; padding: 4px 6px;
 }
 
-QSpinBox {
-    background: #242840; color: #ECE8D8; border: 2px solid #454C73;
-    min-height: 40px; padding: 0 10px;
-    selection-background-color: #FFB547; selection-color: #1A1206;
-}
-QSpinBox:focus { border-color: #FFB547; }
-QSpinBox::up-button, QSpinBox::down-button { width: 0; border: none; }
-
 QTableWidget, QTableView {
     background: #12141F; alternate-background-color: #151827; color: #ECE8D8;
     gridline-color: #2E3452; border: 2px solid #2E3452;
     selection-background-color: #242840; selection-color: #ECE8D8;
 }
 QTableView::item { padding: 0 8px; border: none; }
-QTableView::item:selected { background: #242840; color: #ECE8D8; border-left: 2px solid #FFB547; }
+QTableView::item:selected { background: #242840; color: #ECE8D8; }
 QHeaderView { background: #1A1D2E; }
 QHeaderView::section {
     background: #1A1D2E; color: #A9ADC6; border: none; border-bottom: 2px solid #2E3452;

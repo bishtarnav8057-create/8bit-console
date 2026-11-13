@@ -44,7 +44,7 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 set(GUI_SOURCES
     src/main.cpp
     src/MainWindow.h   src/MainWindow.cpp
-    src/CalculatorTab.h src/CalculatorTab.cpp
+    src/screens/CalculatorScreen.h src/screens/CalculatorScreen.cpp
     src/screens/GameScreen.h src/screens/GameScreen.cpp
     src/widgets/OverlayMenu.h src/widgets/OverlayMenu.cpp
     src/GameBoard.h    src/GameBoard.cpp

@@ -17,9 +17,9 @@
 #include <algorithm>
 #include <random>
 
-#include "CalculatorTab.h"
 #include "Theme.h"
 #include "Programs.h"
+#include "screens/CalculatorScreen.h"
 #include "screens/ConsoleScreen.h"
 #include "screens/GameScreen.h"
 #include "screens/HelpScreen.h"
@@ -80,33 +80,6 @@ private:
     QTimer timer;
 };
 
-// ---------------------------------------------------------------- TabScreen
-// shortcut: wraps Ashmit's two tabs unchanged until phases 4 and 5 replace them with real screens.
-class TabScreen : public Screen
-{
-public:
-    TabScreen(const QString& title, QWidget* tab, QWidget* parent) : Screen(parent), tab(tab)
-    {
-        QVBoxLayout* v = new QVBoxLayout(this);
-        v->setContentsMargins(0, 0, 0, 0);
-        ScreenHeader* header = new ScreenHeader(title, this);
-        connect(header, &ScreenHeader::back, this, &Screen::back);
-        v->addWidget(header);
-        v->addWidget(tab, 1);
-        tab->setParent(this);
-    }
-    void enter() override { tab->setFocus(); }
-
-protected:
-    void keyPressEvent(QKeyEvent* e) override
-    {
-        if (e->key() == Qt::Key_Escape) emit back(); else Screen::keyPressEvent(e);
-    }
-
-private:
-    QWidget* tab;
-};
-
 // ---------------------------------------------------------------- MainWindow
 
 MainWindow::MainWindow()
@@ -119,7 +92,8 @@ MainWindow::MainWindow()
 
     HomeScreen* home = new HomeScreen(stack);
     add(ScreenId::Home, home);
-    add(ScreenId::Calculator, new TabScreen("CALCULATOR", new CalculatorTab(), stack));
+    calculatorScreen = new CalculatorScreen(stack);
+    add(ScreenId::Calculator, calculatorScreen);
     consoleScreen = new ConsoleScreen(stack);
     add(ScreenId::Console, consoleScreen);
     gameScreen = new GameScreen(stack);
@@ -285,6 +259,19 @@ void MainWindow::saveShots(const QString& dir)
 
     go(ScreenId::Home);
     shot("01-home");
+
+    go(ScreenId::Calculator);
+    shot("02-calculator-ready");
+    calculatorScreen->setSum(200, '+', 100);
+    shot("02-calculator-carry");
+    calculatorScreen->setSum(17, '/', 5);
+    shot("02-calculator-divide");
+    calculatorScreen->setSum(7, '/', 0);
+    shot("02-calculator-div0");
+    calculatorScreen->setSum(12, '|', 3);
+    shot("02-calculator-or");
+    calculatorScreen->setSum(15, '*', 20);
+    shot("02-calculator-toobig");
 
     go(ScreenId::Console);   // loads dot.asm
     key(consoleScreen, Qt::Key_Right, true);
