@@ -9,6 +9,7 @@
 #include <QStackedWidget>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <algorithm>
 #include <functional>
 
 #include "Aashish/src/Console.h"
@@ -40,7 +41,8 @@ namespace
 
     const QVector<ProgramEntry>& programs()
     {
-        static const QVector<ProgramEntry> list = {
+        static const QVector<ProgramEntry> list = [] {
+          QVector<ProgramEntry> l = {
             {ScreenId::Calculator, "CALCULATOR",
              "Two bytes, one operation. calc.asm runs it on our CPU.",
              "Pick two 8-bit numbers and an operation. The answer comes from our CPU running calc.asm, "
@@ -57,7 +59,7 @@ namespace
             {ScreenId::Snake, "SNAKE",
              "Eat bytes, grow, don't hit the walls.",
              "Steer the snake to the byte chips. Every byte makes it longer. Hit a wall or yourself and "
-             "it's over. Rules in C++ for now; the assembly version will run in the Console.",
+             "it's over. Rules in C++ for now.",
              SpriteId::SnakeIcon, Badge::CppPreview, "ARCADE",
              {{{QString(QChar(0x2191)), QString(QChar(0x2193)), QString(QChar(0x2190)), QString(QChar(0x2192))}, "TURN"},
               {{"P"}, "PAUSE"}}},
@@ -67,7 +69,12 @@ namespace
              "Rules in C++ for now.",
              SpriteId::PongIcon, Badge::CppPreview, "ARCADE",
              {{{QString(QChar(0x2191)), QString(QChar(0x2193))}, "PADDLE"}, {{"P"}, "PAUSE"}}},
-        };
+          };
+          if (!kShowConsole)
+              l.erase(std::remove_if(l.begin(), l.end(), [](const ProgramEntry& e) { return e.target == ScreenId::Console; }),
+                      l.end());
+          return l;
+        }();
         return list;
     }
 
@@ -430,6 +437,7 @@ HomeScreen::HomeScreen(QWidget* parent) : Screen(parent)
     left->setSpacing(8);
     QString section;
     QGridLayout* grid = nullptr;
+    int rowBase = 0;
     for (int i = 0; i < programs().size(); i++)
     {
         const ProgramEntry& e = programs().at(i);
@@ -443,10 +451,12 @@ HomeScreen::HomeScreen(QWidget* parent) : Screen(parent)
             grid->setAlignment(Qt::AlignLeft | Qt::AlignTop);
             left->addLayout(grid);
             left->addSpacing(8);
+            rowBase = cells.isEmpty() ? 0 : cells.last().y() + 1;
         }
         ProgramCard* card = new ProgramCard(e, i + 1, this);
         card->onActivate = [this, i] { launch(i); };
         card->onFocus = [this, i] { focused = i; preview->show(i); };
+        cells.append(QPoint(grid->count() % 2, rowBase + grid->count() / 2));
         grid->addWidget(card, grid->count() / 2, grid->count() % 2);
         cards.append(card);
     }
@@ -516,10 +526,21 @@ void HomeScreen::keyPressEvent(QKeyEvent* e)
     if (k == Qt::Key_Escape) { emit exitRequested(); return; }
     if (k >= Qt::Key_1 && k < Qt::Key_1 + cards.size()) { focusCard(k - Qt::Key_1); launch(k - Qt::Key_1); return; }
     if (k == Qt::Key_Return || k == Qt::Key_Enter) { launch(focused); return; }
-    // 2-column grid: left/right move by 1, up/down by 2
+    // left/right move by 1; up/down go to the nearest card in the row above/below (sections can be 1 card wide)
     if (k == Qt::Key_Left) { focusCard(focused - 1); return; }
     if (k == Qt::Key_Right) { focusCard(focused + 1); return; }
-    if (k == Qt::Key_Up) { focusCard(focused - 2); return; }
-    if (k == Qt::Key_Down) { focusCard(focused + 2); return; }
+    if (k == Qt::Key_Up || k == Qt::Key_Down) { focusCard(cardInRow(k == Qt::Key_Down ? 1 : -1)); return; }
     Screen::keyPressEvent(e);
+}
+
+int HomeScreen::cardInRow(int step) const
+{
+    const QPoint at = cells[focused];
+    const int rows = cells.last().y() + 1;
+    const int row = (at.y() + step + rows) % rows;
+    int best = focused;
+    for (int i = 0; i < cells.size(); i++)
+        if (cells[i].y() == row && (cells[best].y() != row || qAbs(cells[i].x() - at.x()) < qAbs(cells[best].x() - at.x())))
+            best = i;
+    return best;
 }

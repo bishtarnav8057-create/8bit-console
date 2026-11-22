@@ -1,17 +1,18 @@
 # PIXEL-8 GUI
 
 The desktop window of PIXEL-8: one machine with its own interface. It starts with a boot self-test,
-then a launcher with four programs. Two of them run on **our CPU** (Calculator, Console); the two games
-are a C++ preview until the assembly version exists.
+then a launcher with three programs: the Calculator runs on **our CPU**; the two games are a C++ preview
+until the assembly version exists. The Console screen is built but hidden from Home and Help for the demo:
+set `kShowConsole = true` in `src/screens/Screen.h` to show it again.
 
 Nothing in `CPU/` or `pixel/` is changed. The GUI compiles the CPU sources in place from `../CPU`.
 
 | Screen | What it does |
 |---|---|
 | **Boot** | A real self-test on a `Console`: RAM and VRAM keep a written byte, ROM refuses a write, `sum.asm` must halt with 55 in RAM, `calc.asm` must assemble. Any key skips. Can be turned off in Settings. |
-| **Home** | Program cards (arrows or 1-4, Enter), a live preview of the focused card (`dot.asm` really running, Snake and Pong played by bots), Help, About, Settings, Exit. |
+| **Home** | Program cards (arrows or 1-3, Enter; 1-4 with the Console shown), a live preview of the focused card (`dot.asm` really running when the Console is shown, Snake and Pong played by bots), Help, About, Settings, Exit. |
 | **Calculator** | Two bytes and an operation; the answer comes from the CPU running `CPU/programs/calc.asm`. Shows the bits, CARRY / BORROW / TOO BIG / DIV BY 0 explained, the registers, flags and the lines of `calc.asm` that ran. Click a trace row for the registers at that point; REPLAY walks the rows. |
-| **Console** | The emulator itself: load any `.asm`, run it frame by frame, see its 32 x 16 screen, the buttons it reads, the registers, its text output and the last 16 instructions. HLT and faults are shown; a broken file shows its errors by line. |
+| **Console** (hidden) | The emulator itself: load any `.asm`, run it frame by frame, see its 32 x 16 screen, the buttons it reads, the registers, its text output and the last 16 instructions. HLT and faults are shown; a broken file shows its errors by line. |
 | **Snake / Pong** | READY, PLAYING, PAUSED (Esc), GAME OVER. Sprites, best score kept. Rules in `src/Games.cpp` (from `pixel/pixel8_arcade.cpp`). |
 | **Help (F1)** | Controls for every screen, how a key reaches the CPU, the memory map to scale, the screen colours. |
 
@@ -39,7 +40,7 @@ it looks next to the exe and up to 3 folders above). If you move the exe, use **
 | Where | Keys |
 |---|---|
 | Everywhere | **F1** help, **F11** full screen, **Esc** back (on Home: exit, always with a confirmation) |
-| Home | **arrows** choose, **Enter** or **1-4** launch |
+| Home | **arrows** choose, **Enter** or **1-3** launch |
 | Calculator | type **0-255** in A and B (**Tab** switches, **Up/Down** or the wheel step), **+ - \* / & \| ^** pick the operation, **Enter** runs |
 | Console | **arrows / WASD** D-pad, **Z / J** = A, **X / K** = B, **Enter** = START, **Shift** = SELECT, **Space** run/pause, **F5** one frame while paused, **Ctrl+O** load a file |
 | Snake | **Enter / Space** start, **arrows / WASD** turn, **P / Space / Esc** pause menu, **R** restart |

@@ -6,6 +6,10 @@
 
 enum class ScreenId { Boot, Home, Calculator, Console, Snake, Pong, Help };
 
+// false hides the Console's Home card and Help page for a shorter demo; the screen is still built and
+// tested (--shots opens it directly). Set true to bring it back.
+constexpr bool kShowConsole = false;
+
 class Screen : public QWidget
 {
     Q_OBJECT

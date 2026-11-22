@@ -270,11 +270,15 @@ void MainWindow::saveShots(const QString& dir)
     shot("00-boot");
     go(ScreenId::Home);
     shot("01-home");
-    homeScreen->runPreview(1, 30);
-    shot("01-home-console-preview");
-    homeScreen->runPreview(2, 60);
+    if (kShowConsole)
+    {
+        homeScreen->runPreview(1, 30);
+        shot("01-home-console-preview");
+    }
+    const int snakeCard = kShowConsole ? 2 : 1;
+    homeScreen->runPreview(snakeCard, 60);
     shot("01-home-snake-preview");
-    homeScreen->runPreview(3, 40);
+    homeScreen->runPreview(snakeCard + 1, 40);
     shot("01-home-pong-preview");
     homeScreen->runPreview(0, 0);
 
