@@ -104,8 +104,9 @@ HelpScreen::HelpScreen(QWidget* parent) : Screen(parent)
     list->setFixedWidth(220);
     list->setFont(Theme::label());
     list->addItems({"CONTROLS", "CALCULATOR", "CONSOLE", "SNAKE", "PONG", "MEMORY MAP"});
+    list->item(Console)->setHidden(!kShowConsole);
     body->addWidget(list, 0, Qt::AlignTop);
-    list->setFixedHeight(list->count() * 40 + 8);
+    list->setFixedHeight((list->count() - (kShowConsole ? 0 : 1)) * 40 + 8);
 
     pages = new QStackedWidget(this);
     body->addWidget(pages, 1);
@@ -114,7 +115,8 @@ HelpScreen::HelpScreen(QWidget* parent) : Screen(parent)
     // Global
     Panel* g = page("CONTROLS: EVERYWHERE", this);
     g->body()->addWidget(keyRow({UP, DOWN, LEFT, RIGHT}, "Home: choose a program"));
-    g->body()->addWidget(keyRow({ENTER, "/", "1", "2", "3", "4"}, "Home: launch it"));
+    g->body()->addWidget(keyRow(kShowConsole ? QStringList{ENTER, "/", "1", "2", "3", "4"}
+                                             : QStringList{ENTER, "/", "1", "2", "3"}, "Home: launch it"));
     g->body()->addWidget(keyRow({"ESC"}, "Back to the menu (in a game: pause menu). On Home: exit."));
     g->body()->addWidget(keyRow({"F1"}, "This help, from any screen"));
     g->body()->addWidget(keyRow({"F11"}, "Full screen on / off"));
@@ -162,8 +164,7 @@ HelpScreen::HelpScreen(QWidget* parent) : Screen(parent)
     s->body()->addWidget(keyRow({"R"}, "Restart"));
     s->body()->addSpacing(8);
     s->body()->addWidget(para("Eat the byte chips to grow. Hitting a wall or yourself ends the game. Your best "
-                              "score is kept. These rules are C++ (a preview); the assembly version will run "
-                              "in the Console."));
+                              "score is kept. These rules are C++ (a preview)."));
     s->body()->addStretch(1);
     pages->addWidget(s);
 

@@ -3,6 +3,7 @@
 #ifndef HOMESCREEN_H
 #define HOMESCREEN_H
 
+#include <QPoint>
 #include <QVector>
 
 #include "art/Sprites.h"
@@ -33,8 +34,10 @@ protected:
 private:
     void focusCard(int i);
     void launch(int i);
+    int cardInRow(int step) const;           // up/down: +1 row below, -1 row above (wraps)
 
     QVector<ProgramCard*> cards;
+    QVector<QPoint> cells;                   // each card's place on screen: x = column, y = row across sections
     PreviewPane* preview;
     int focused = 0;
 };
