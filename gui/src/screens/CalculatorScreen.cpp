@@ -157,7 +157,12 @@ CalculatorScreen::CalculatorScreen(QWidget* parent) : Screen(parent)
         row->addStretch(1);
         l->addLayout(row);
         QLineEdit* s = spin; BitRow* b = bits; QLabel* h = hex;
-        connect(s, &QLineEdit::textChanged, this, [b, h](const QString& t) { b->setValue(t.toInt()); h->setText(hex2(t.toInt())); });
+        connect(s, &QLineEdit::textChanged, this, [s, b, h](const QString& t) {
+            // QIntValidator still lets "500" through while typing; a byte stops at 255
+            if (t.toInt() > 255) { s->setText("255"); return; }
+            b->setValue(t.toInt());
+            h->setText(hex2(t.toInt()));
+        });
         connect(b, &BitRow::valueChanged, s, [s](int v) { s->setText(QString::number(v)); });
     };
 
@@ -433,30 +438,31 @@ void CalculatorScreen::showResult(char op, int a, int b, const CalcResult& r)
         {
             statusChip->setChip("CARRY", Theme::amber, Theme::amberInk);
             why->setTitle(QString("WHY %1?").arg(answer));
-            whyBits->setValue(a + b);
+            // only what the CPU produced: the C flag as the 9th bit, then R0 (no sum worked out here)
+            whyBits->setValue(256 + answer);
             whyBits->show();
             whyBitsNote->show();
-            whyText->setText(QString("%1 + %2 = %3 needs 9 bits and a byte has 8: the 9th bit (256) is dropped, "
-                                     "%3 - 256 = %4. The C flag records the carry.")
-                                 .arg(a).arg(b).arg(a + b).arg(answer));
+            whyText->setText(QString("%1 + %2 is more than 255, the biggest number a byte holds. The adder "
+                                     "kept the low 8 bits, %3, and the bit that fell off went into the C flag.")
+                                 .arg(a).arg(b).arg(answer));
             why->show();
         }
         else if (r.overflow && op == '-')
         {
             statusChip->setChip("BORROW", Theme::amber, Theme::amberInk);
             why->setTitle(QString("WHY %1?").arg(answer));
-            whyText->setText(QString("%1 - %2 = %3 is below 0 and a byte cannot be negative, so it wraps "
-                                     "around: %3 + 256 = %4. The C flag records the borrow.")
-                                 .arg(a).arg(b).arg(a - b).arg(answer));
+            whyText->setText(QString("%1 - %2 goes below 0 and a byte cannot be negative, so it wraps "
+                                     "around to %3. The C flag records the borrow.")
+                                 .arg(a).arg(b).arg(answer));
             why->show();
         }
         else if (r.overflow && op == '*')
         {
             statusChip->setChip("TOO BIG", Theme::amber, Theme::amberInk);
             why->setTitle(QString("WHY %1?").arg(answer));
-            whyText->setText(QString("%1 x %2 = %3, which does not fit in 8 bits (0-255). The CPU keeps only "
-                                     "the low 8 bits: %3 mod 256 = %4.")
-                                 .arg(a).arg(b).arg(a * b).arg(answer));
+            whyText->setText(QString("%1 x %2 does not fit in 8 bits (0-255). The CPU keeps only "
+                                     "the low 8 bits, %3.")
+                                 .arg(a).arg(b).arg(answer));
             why->show();
         }
     }
