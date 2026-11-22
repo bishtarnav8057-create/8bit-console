@@ -1,3 +1,7 @@
 .claude/
 docs/
 *.exe
+
+# Qt GUI build output and Qt Creator user files
+gui/build/
+*.user
